@@ -25,10 +25,8 @@ export const webLLMService = {
 
     isInitializing = true;
     try {
-      engine = new webllm.MLCEngine();
-      await engine.reload(MODEL_ID, {
-        initProgressCallback: onProgress,
-      });
+      engine = new webllm.MLCEngine({ initProgressCallback: onProgress });
+      await engine.reload(MODEL_ID);
       isInitialized = true;
     } finally {
       isInitializing = false;
@@ -74,6 +72,22 @@ export const webLLMService = {
       const reply = await engine.chat.completions.create(params);
       return reply.choices[0]?.message?.content ?? "";
     }
+  },
+
+  // Raw call: caller supplies full messages array; no system prompt injected.
+  // Intended for structured JSON outputs (e.g. boundary detection).
+  async generateRaw(
+    messages: webllm.ChatCompletionMessageParam[]
+  ): Promise<string> {
+    if (!engine || !isInitialized) {
+      throw new Error("WebLLM engine not initialized");
+    }
+    const reply = await engine.chat.completions.create({
+      messages,
+      temperature: 0.1,
+      max_tokens: 512,
+    });
+    return reply.choices[0]?.message?.content ?? "";
   },
 
   reset() {

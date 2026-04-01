@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authService } from "@/lib/auth";
 import { storageService, Document } from "@/lib/storage";
-import { extractTextFromPDF } from "@/lib/pdfExtractor";
+import { extractTextFromPDF, cleanMedicalText } from "@/lib/pdfExtractor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -68,7 +68,7 @@ const AddDocument = ({ isAdmin = false }: AddDocumentProps) => {
     let content: string;
 
     try {
-      content = await extractTextFromPDF(selectedFile);
+      content = cleanMedicalText(await extractTextFromPDF(selectedFile));
     } catch {
       toast({
         title: "Ошибка извлечения",
