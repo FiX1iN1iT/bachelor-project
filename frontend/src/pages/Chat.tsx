@@ -3,11 +3,14 @@ import { useParams, useNavigate } from "react-router-dom";
 import { authService } from "@/lib/auth";
 import { storageService, Chat as ChatType, Message } from "@/lib/storage";
 import { webLLMService } from "@/lib/webllm";
+import { answerWithRAG } from "@/lib/rag";
+import { vectorStore } from "@/lib/vectorStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Send, Loader2 } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { ArrowLeft, Send, Loader2, BookOpen, Bug } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const Chat = () => {
@@ -25,6 +28,25 @@ const Chat = () => {
   const [llmReady, setLlmReady] = useState(webLLMService.isInitialized);
   const [initProgress, setInitProgress] = useState(0);
   const [initText, setInitText] = useState("Загрузка модели...");
+
+  // Document title cache: docId → title
+  const [docTitles, setDocTitles] = useState<Record<string, string>>({});
+
+  // Debug panel
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [dbCount, setDbCount] = useState<number | null>(null);
+  const [lastContext, setLastContext] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    const allDocs = [
+      ...storageService.getDocuments(user.id),
+      ...storageService.getGeneralDocuments(),
+    ];
+    const map: Record<string, string> = {};
+    for (const d of allDocs) map[d.id] = d.title;
+    setDocTitles(map);
+  }, [user?.id]);
 
   useEffect(() => {
     if (webLLMService.isInitialized) {
@@ -120,13 +142,8 @@ const Chat = () => {
     setMessages(prev => [...prev, assistantMessage]);
 
     try {
-      const history = updatedMessages.map(m => ({
-        role: m.role as "user" | "assistant",
-        content: m.content,
-      }));
-
       let fullContent = "";
-      await webLLMService.generateResponse(history, (chunk) => {
+      const { answer, sources, contextUsed } = await answerWithRAG(userMessage.content, (chunk) => {
         fullContent += chunk;
         setMessages(prev =>
           prev.map(m =>
@@ -135,8 +152,17 @@ const Chat = () => {
         );
       });
 
-      const finalMessage = { ...assistantMessage, content: fullContent };
+      setLastContext(contextUsed);
+
+      const finalMessage: Message = {
+        ...assistantMessage,
+        content: answer,
+        sources: sources.length > 0 ? sources : undefined,
+      };
       storageService.saveMessage(finalMessage);
+      setMessages(prev =>
+        prev.map(m => m.id === assistantMessage.id ? finalMessage : m)
+      );
 
       const updatedChat = { ...chat, updatedAt: new Date().toISOString() };
       storageService.saveChat(updatedChat);
@@ -153,7 +179,7 @@ const Chat = () => {
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
@@ -169,11 +195,43 @@ const Chat = () => {
         <Button variant="ghost" size="icon" onClick={() => navigate('/chats')}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-bold text-foreground">{chat.title}</h1>
           <p className="text-sm text-muted-foreground">Медицинский ИИ-ассистент</p>
         </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          title="Debug panel"
+          onClick={() => {
+            setDebugOpen(o => !o);
+            vectorStore.totalCount().then(setDbCount);
+          }}
+        >
+          <Bug className="h-5 w-5 text-muted-foreground" />
+        </Button>
       </div>
+
+      {/* Debug panel */}
+      {debugOpen && (
+        <Card className="mb-4 p-4 space-y-3 border-dashed border-yellow-500/50 bg-yellow-500/5 text-xs font-mono">
+          <p className="font-semibold text-sm font-sans">Debug</p>
+          <p>
+            <span className="text-muted-foreground">IndexedDB chunks total: </span>
+            <span className="font-bold">{dbCount ?? '…'}</span>
+          </p>
+          <div>
+            <p className="text-muted-foreground mb-1">Last RAG context passed to WebLLM:</p>
+            {lastContext ? (
+              <ScrollArea className="h-48 rounded border border-border bg-muted p-2">
+                <pre className="whitespace-pre-wrap text-xs">{lastContext}</pre>
+              </ScrollArea>
+            ) : (
+              <p className="text-muted-foreground italic">No query sent yet</p>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* Model loading banner */}
       {!llmReady && (
@@ -209,18 +267,42 @@ const Chat = () => {
                 className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                  className={`max-w-[80%] rounded-lg px-4 py-3 space-y-3 ${
                     message.role === 'user'
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-muted text-foreground'
                   }`}
                 >
+                  {/* Answer text */}
                   {message.content ? (
-                    <p className="whitespace-pre-wrap">{message.content}</p>
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
                   ) : (
                     <Loader2 className="h-5 w-5 animate-spin" />
                   )}
-                  <p className="text-xs opacity-70 mt-1">
+
+                  {/* Sources */}
+                  {message.role === 'assistant' && message.sources && message.sources.length > 0 && (
+                    <div className="border-t border-border/40 pt-2 space-y-1">
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground font-medium">
+                        <BookOpen className="h-3 w-3" />
+                        <span>Источники</span>
+                      </div>
+                      <ol className="space-y-1">
+                        {message.sources.map((src, i) => (
+                          <li key={i} className="text-xs text-muted-foreground">
+                            <span className="font-medium text-foreground">
+                              {i + 1}. {docTitles[src.docId] ?? src.docId}
+                            </span>
+                            <span className="ml-1 opacity-60">
+                              — {src.preview}{src.preview.length >= 160 ? '…' : ''}
+                            </span>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+
+                  <p className="text-xs opacity-50">
                     {new Date(message.timestamp).toLocaleTimeString('ru-RU')}
                   </p>
                 </div>
@@ -236,7 +318,7 @@ const Chat = () => {
         <Input
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          onKeyPress={handleKeyPress}
+          onKeyDown={handleKeyDown}
           placeholder={llmReady ? "Введите ваше сообщение..." : "Дождитесь загрузки модели..."}
           disabled={isLoading || !llmReady}
           className="flex-1"

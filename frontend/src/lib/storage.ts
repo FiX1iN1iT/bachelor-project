@@ -9,12 +9,19 @@ export interface Chat {
   updatedAt: string;
 }
 
+export interface MessageSource {
+  docId: string;
+  chunkIndex: number;
+  preview: string;
+}
+
 export interface Message {
   id: string;
   chatId: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  sources?: MessageSource[];
 }
 
 export interface Document {

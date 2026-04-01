@@ -3,6 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { authService } from "@/lib/auth";
 import { storageService, Document } from "@/lib/storage";
 import { cleanMedicalText, detectSemanticChunks, Chunk } from "@/lib/pdfExtractor";
+import { embedTexts } from "@/lib/embeddings";
+import { vectorStore, VectorChunk } from "@/lib/vectorStore";
 import { webLLMService } from "@/lib/webllm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +14,16 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { ArrowLeft, FileText, Layers, Loader2, ScanText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-type ChunkingState = "idle" | "llm-init" | "chunking" | "done" | "error";
+type ChunkingState = "idle" | "llm-init" | "chunking" | "embedding" | "done" | "error";
+
+function vectorChunksToDisplay(vchunks: VectorChunk[]): Chunk[] {
+  return vchunks.map((c, i) => ({
+    id: c.id,
+    text: c.content,
+    startIndex: i,
+    endIndex: i + c.content.length,
+  }));
+}
 
 const ViewDocument = () => {
   const { documentId } = useParams();
@@ -38,21 +49,32 @@ const ViewDocument = () => {
 
     const doc = allDocs.find(d => d.id === documentId);
 
-    if (doc) {
-      setDocument(doc);
-      setCleanedText(cleanMedicalText(doc.content));
-    } else {
+    if (!doc) {
       toast({
         title: "Документ не найден",
         description: "Перенаправление к списку документов",
         variant: "destructive",
       });
       navigate("/documents");
+      return;
     }
-  }, [documentId, user, navigate, toast]);
+
+    setDocument(doc);
+    setCleanedText(cleanMedicalText(doc.content));
+
+    // Restore from IndexedDB if already indexed — no re-analysis needed
+    vectorStore.getBySource(doc.id).then(cached => {
+      if (cached.length > 0) {
+        setChunks(vectorChunksToDisplay(cached));
+        setProgressMsg(`Загружено ${cached.length} чанков из кэша`);
+        setChunkingState("done");
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentId, user?.id]);
 
   const handleAnalyze = async () => {
-    if (!cleanedText) return;
+    if (!cleanedText || !document) return;
 
     try {
       // Step 1: ensure LLM is ready
@@ -66,7 +88,7 @@ const ViewDocument = () => {
         });
       }
 
-      // Step 2: run chunking
+      // Step 2: semantic chunking
       setChunkingState("chunking");
       setProgressValue(0);
 
@@ -75,9 +97,28 @@ const ViewDocument = () => {
         setProgressValue(Math.round((current / total) * 100));
       });
 
+      // Step 3: embed + persist to IndexedDB
+      setChunkingState("embedding");
+      setProgressMsg("Векторизация чанков…");
+      setProgressValue(0);
+
+      await vectorStore.deleteBySource(document.id);
+
+      const embeddings = await embedTexts(result.map(c => c.text));
+
+      const vectorChunks: VectorChunk[] = result.map((c, i) => ({
+        id: `${document.id}::${c.id}`,
+        content: c.text,
+        embedding: embeddings[i],
+        metadata: { source: document.id, chunkIndex: i },
+      }));
+
+      await vectorStore.addChunks(vectorChunks);
+
       setChunks(result);
       setChunkingState("done");
-    } catch {
+    } catch (err) {
+      console.error("[ViewDocument] analysis error:", err);
       setChunkingState("error");
       toast({
         title: "Ошибка анализа",
@@ -98,7 +139,15 @@ const ViewDocument = () => {
 
   if (!document) return null;
 
-  const isRunning = chunkingState === "llm-init" || chunkingState === "chunking";
+  const isRunning =
+    chunkingState === "llm-init" ||
+    chunkingState === "chunking" ||
+    chunkingState === "embedding";
+
+  const progressLabel =
+    chunkingState === "llm-init" ? "Инициализация модели" :
+    chunkingState === "chunking"  ? "Анализ текста" :
+                                    "Векторизация";
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -143,12 +192,11 @@ const ViewDocument = () => {
           </CardTitle>
           <CardDescription>
             {chunkingState === "done"
-              ? `Текст разбит на ${chunks.length} смысловых блоков`
+              ? `Текст разбит на ${chunks.length} смысловых блоков (сохранено в IndexedDB)`
               : "Разбивка текста на смысловые блоки с помощью LLM"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Idle / error: show button */}
           {(chunkingState === "idle" || chunkingState === "error") && (
             <Button onClick={handleAnalyze} className="gap-2">
               <ScanText className="h-4 w-4" />
@@ -156,21 +204,16 @@ const ViewDocument = () => {
             </Button>
           )}
 
-          {/* In-progress */}
           {isRunning && (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>
-                  {chunkingState === "llm-init" ? "Инициализация модели" : "Анализ текста"}
-                  {" — "}{progressMsg}
-                </span>
+                <span>{progressLabel} — {progressMsg}</span>
               </div>
               <Progress value={progressValue} className="h-2" />
             </div>
           )}
 
-          {/* Results */}
           {chunkingState === "done" && chunks.length > 0 && (
             <ScrollArea className="h-[520px] pr-3">
               <Accordion type="multiple" className="space-y-2">

@@ -90,6 +90,35 @@ export const webLLMService = {
     return reply.choices[0]?.message?.content ?? "";
   },
 
+  // Raw call with optional streaming. Used by the RAG pipeline.
+  async generateWithMessages(
+    messages: webllm.ChatCompletionMessageParam[],
+    onChunk?: (chunk: string) => void
+  ): Promise<string> {
+    if (!engine || !isInitialized) {
+      throw new Error("WebLLM engine not initialized");
+    }
+
+    if (onChunk) {
+      const stream = await engine.chat.completions.create({
+        messages,
+        stream: true,
+      });
+      let full = "";
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta?.content ?? "";
+        if (delta) {
+          full += delta;
+          onChunk(delta);
+        }
+      }
+      return full;
+    }
+
+    const reply = await engine.chat.completions.create({ messages });
+    return reply.choices[0]?.message?.content ?? "";
+  },
+
   reset() {
     engine = null;
     isInitialized = false;
