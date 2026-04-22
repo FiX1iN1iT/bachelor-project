@@ -2,18 +2,19 @@ import { retrieveContext } from "@/lib/retrieval";
 import { buildContext } from "@/lib/context";
 import { webLLMService } from "@/lib/webllm";
 
-const RAG_SYSTEM_PROMPT = `You are a medical assistant AI.
+const RAG_SYSTEM_PROMPT = `Ты — медицинский ИИ-ассистент. Отвечай ТОЛЬКО на русском языке.
 
-Answer the question using ONLY the provided context.
+Отвечай на вопрос, используя ИСКЛЮЧИТЕЛЬНО предоставленный контекст.
 
-Rules:
-- Do NOT hallucinate
-- If information is missing, say "I don't have enough information"
-- Cite sources using [Source X]
-- Be precise and clinical`;
+Правила:
+- НЕ придумывай информацию, которой нет в контексте
+- Если информации недостаточно, отвечай: «В загруженных документах недостаточно информации по этому вопросу»
+- Ссылайся на источники в формате [Источник X]
+- Отвечай точно и по существу
+- Никогда не используй английский язык`;
 
 function buildRAGPrompt(context: string, question: string): string {
-  return `Context:\n${context}\n\nQuestion:\n${question}\n\nAnswer:`;
+  return `Контекст:\n${context}\n\nВопрос:\n${question}\n\nОтвет:`;
 }
 
 export interface RAGSource {
@@ -48,7 +49,7 @@ export async function answerWithRAG(
   const context =
     chunks.length > 0
       ? buildContext(chunks)
-      : "No relevant documents found in the knowledge base.";
+      : "В базе знаний не найдено подходящих документов.";
 
   const answer = await webLLMService.generateWithMessages(
     [

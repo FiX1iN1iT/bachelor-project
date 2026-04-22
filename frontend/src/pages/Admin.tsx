@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authService } from "@/lib/auth";
 import { storageService, Document, MLParams } from "@/lib/storage";
+import { vectorStore } from "@/lib/vectorStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, FileText, Trash2, Settings } from "lucide-react";
+import { Plus, FileText, Trash2, Settings, Bug } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const Admin = () => {
@@ -16,6 +17,8 @@ const Admin = () => {
   const user = authService.getCurrentUser();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [mlParams, setMLParams] = useState<MLParams>(storageService.getMLParams());
+  const [vectorCount, setVectorCount] = useState<number | null>(null);
+  const [isClearing, setIsClearing] = useState(false);
 
   useEffect(() => {
     if (!user || !authService.isAdmin(user)) {
@@ -54,6 +57,24 @@ const Admin = () => {
     });
   };
 
+  const loadVectorCount = async () => {
+    const count = await vectorStore.totalCount();
+    setVectorCount(count);
+  };
+
+  const handleClearVectorStore = async () => {
+    setIsClearing(true);
+    try {
+      await vectorStore.clear();
+      setVectorCount(0);
+      toast({ title: "IndexedDB очищена", description: "Все векторные embeddings удалены." });
+    } catch (e) {
+      toast({ title: "Ошибка", description: "Не удалось очистить IndexedDB.", variant: "destructive" });
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
   const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString('ru-RU', {
       month: 'short',
@@ -71,7 +92,7 @@ const Admin = () => {
         <p className="text-muted-foreground mt-1">Управление медицинскими документами и параметрами ML</p>
       </div>
 
-      <Tabs defaultValue="documents" className="w-full">
+      <Tabs defaultValue="documents" className="w-full" onValueChange={(v) => { if (v === "debug") loadVectorCount(); }}>
         <TabsList>
           <TabsTrigger value="documents">
             <FileText className="h-4 w-4 mr-2" />
@@ -80,6 +101,10 @@ const Admin = () => {
           <TabsTrigger value="ml-params">
             <Settings className="h-4 w-4 mr-2" />
             Параметры ML
+          </TabsTrigger>
+          <TabsTrigger value="debug">
+            <Bug className="h-4 w-4 mr-2" />
+            Отладка
           </TabsTrigger>
         </TabsList>
 
@@ -221,6 +246,42 @@ const Admin = () => {
                 <Button onClick={handleSaveMLParams}>
                   Сохранить конфигурацию
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="debug">
+          <Card>
+            <CardHeader>
+              <CardTitle>IndexedDB</CardTitle>
+              <CardDescription>
+                Управление локальным хранилищем векторных embeddings
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-muted-foreground">
+                  Чанков в хранилище:{" "}
+                  <span className="font-mono font-semibold text-foreground">
+                    {vectorCount === null ? "—" : vectorCount}
+                  </span>
+                </span>
+                <Button variant="outline" size="sm" onClick={loadVectorCount}>
+                  Обновить
+                </Button>
+              </div>
+              <div className="pt-2 border-t border-border">
+                <Button
+                  variant="destructive"
+                  disabled={isClearing}
+                  onClick={handleClearVectorStore}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  {isClearing ? "Очистка..." : "Очистить IndexedDB"}
+                </Button>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Удаляет все векторные embeddings. Документы в localStorage не затрагиваются.
+                </p>
               </div>
             </CardContent>
           </Card>

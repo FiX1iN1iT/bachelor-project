@@ -3,8 +3,8 @@ import {
   type FeatureExtractionPipeline,
 } from "@huggingface/transformers";
 
-// ~23 MB ONNX model, 384-dim output, no backend required
-const MODEL_ID = "Xenova/all-MiniLM-L6-v2";
+// ~120 MB ONNX model, 384-dim output, 50+ languages including Russian
+const MODEL_ID = "Xenova/paraphrase-multilingual-MiniLM-L12-v2";
 
 let extractor: FeatureExtractionPipeline | null = null;
 

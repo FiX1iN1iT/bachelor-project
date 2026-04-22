@@ -68,9 +68,8 @@ export function cleanMedicalText(rawText: string): string {
   // --- 4. Smart line joining ---
 
   // a) Short standalone lines are section/subsection headings in any academic paper.
-  //    Pattern: a line between newlines consisting only of letters+spaces,
-  //    1–7 words, no sentence-ending punctuation → surround with paragraph breaks.
-  text = text.replace(/\n([A-Z][A-Za-z ]{2,60})\n/g, (match, content) => {
+  //    Matches both Latin and Cyrillic headings (1–7 words, no sentence-ending punctuation).
+  text = text.replace(/\n([A-ZА-ЯЁ][A-Za-zА-яЁё ]{2,60})\n/g, (match, content) => {
     const words = content.trim().split(/\s+/).length;
     return words <= 7 ? `\n\n${content.trim()}\n\n` : match;
   });
@@ -85,8 +84,10 @@ export function cleanMedicalText(rawText: string): string {
   text = text.replace(/\n/g, " ");
   text = text.replace(new RegExp(PARA_MARKER, "g"), "\n\n");
 
-  // --- 5. Remove references section (common in most papers)
+  // --- 5. Remove references section (English and Russian variants)
   text = text.replace(/References[\s\S]*/i, "");
+  text = text.replace(/Список литературы[\s\S]*/i, "");
+  text = text.replace(/\nЛитература\n[\s\S]*/i, "");
 
   // --- 6. Normalize whitespace ---
   // Collapse 3+ newlines into paragraph breaks
@@ -165,12 +166,12 @@ const BOUNDARY_PROMPT = (paragraphs: Paragraph[]) => {
   const numbered = paragraphs
     .map((p, i) => `[${i}] ${p.text.slice(0, 220)}`)
     .join("\n");
-  return `Numbered paragraphs from a medical text:
+  return `Пронумерованные абзацы из медицинского текста:
 ${numbered}
 
-Which paragraph numbers start a NEW topic or section?
-Always include 0. Only mark clear topic shifts.
-Return JSON only: {"boundaries": [0, 3, 7]}`;
+Какие номера абзацев начинают НОВУЮ тему или раздел?
+Всегда включай 0. Отмечай только явные смены темы.
+Верни только JSON: {"boundaries": [0, 3, 7]}`;
 };
 
 function parseBoundaryIndices(response: string): number[] {
