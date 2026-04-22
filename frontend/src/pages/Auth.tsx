@@ -17,9 +17,8 @@ const Auth = () => {
   const [isRegister, setIsRegister] = useState(mode === 'register');
 
   const [formData, setFormData] = useState({
-    email: '',
+    username: '',
     password: '',
-    name: '',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -28,14 +27,14 @@ const Auth = () => {
 
     try {
       if (isRegister) {
-        authService.register(formData.email, formData.password, formData.name);
+        await authService.register(formData.username, formData.password);
         toast({
           title: "Аккаунт создан!",
           description: "Пожалуйста, войдите с вашими данными.",
         });
         setIsRegister(false);
       } else {
-        const user = authService.login(formData.email, formData.password);
+        const user = await authService.login(formData.username, formData.password);
         toast({
           title: "С возвращением!",
           description: `Вы вошли как ${user.name}`,
@@ -71,28 +70,14 @@ const Auth = () => {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {isRegister && (
-              <div className="space-y-2">
-                <Label htmlFor="name">Полное имя</Label>
-                <Input
-                  id="name"
-                  type="text"
-                  placeholder="Иван Иванов"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  required
-                />
-              </div>
-            )}
-            
             <div className="space-y-2">
-              <Label htmlFor="email">Электронная почта</Label>
+              <Label htmlFor="username">Имя пользователя</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="example@mail.ru"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                id="username"
+                type="text"
+                placeholder="username"
+                value={formData.username}
+                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                 required
               />
             </div>
@@ -137,10 +122,6 @@ const Auth = () => {
                   </button>
                 </p>
               )}
-            </div>
-
-            <div className="bg-muted p-3 rounded text-xs text-muted-foreground text-center">
-              Демо данные: admin@medical.com / admin123 или user@medical.com / user123
             </div>
           </form>
         </CardContent>

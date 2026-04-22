@@ -1,6 +1,3 @@
-// Mock authentication system for prototype
-// In production, this would use Lovable Cloud authentication
-
 export type UserRole = 'user' | 'admin';
 
 export interface User {
@@ -11,83 +8,76 @@ export interface User {
   createdAt: string;
 }
 
-const USERS_KEY = 'medical_chat_users';
-const CURRENT_USER_KEY = 'medical_chat_current_user';
+const TOKEN_KEY = 'auth_token';
+const USER_KEY = 'auth_user';
+
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+
+function decodeJwtPayload(token: string): Record<string, unknown> {
+  const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+  return JSON.parse(atob(base64));
+}
 
 export const authService = {
-  // Get all users from localStorage
-  getUsers(): User[] {
-    const users = localStorage.getItem(USERS_KEY);
-    return users ? JSON.parse(users) : [];
+  getToken(): string | null {
+    return localStorage.getItem(TOKEN_KEY);
   },
 
-  // Save users to localStorage
-  saveUsers(users: User[]): void {
-    localStorage.setItem(USERS_KEY, JSON.stringify(users));
-  },
-
-  // Get current user
   getCurrentUser(): User | null {
-    const user = localStorage.getItem(CURRENT_USER_KEY);
-    return user ? JSON.parse(user) : null;
+    const raw = localStorage.getItem(USER_KEY);
+    return raw ? (JSON.parse(raw) as User) : null;
   },
 
-  // Set current user
-  setCurrentUser(user: User | null): void {
-    if (user) {
-      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
-    } else {
-      localStorage.removeItem(CURRENT_USER_KEY);
-    }
-  },
+  async login(username: string, password: string): Promise<User> {
+    const body = new URLSearchParams({ username, password });
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    });
 
-  // Register new user
-  register(email: string, password: string, name: string, role: UserRole = 'user'): User {
-    const users = this.getUsers();
-    
-    if (users.find(u => u.email === email)) {
-      throw new Error('User already exists');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as { detail?: string }).detail ?? 'Неверный логин или пароль');
     }
 
-    const newUser: User = {
-      id: crypto.randomUUID(),
-      email,
-      name,
+    const { access_token } = (await res.json()) as { access_token: string };
+    const payload = decodeJwtPayload(access_token);
+    const sub = payload['sub'] as string;
+    const role = (payload['role'] as UserRole) ?? 'user';
+
+    const user: User = {
+      id: sub,
+      email: sub,
+      name: sub,
       role,
       createdAt: new Date().toISOString(),
     };
 
-    users.push(newUser);
-    this.saveUsers(users);
-    return newUser;
-  },
-
-  // Login user
-  login(email: string, password: string): User {
-    const users = this.getUsers();
-    const user = users.find(u => u.email === email);
-    
-    if (!user) {
-      throw new Error('Invalid credentials');
-    }
-
-    this.setCurrentUser(user);
+    localStorage.setItem(TOKEN_KEY, access_token);
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
     return user;
   },
 
-  // Logout
-  logout(): void {
-    this.setCurrentUser(null);
+  async register(username: string, password: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as { detail?: string }).detail ?? 'Ошибка регистрации');
+    }
   },
 
-  // Check if user is admin
+  logout(): void {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+  },
+
   isAdmin(user: User | null): boolean {
     return user?.role === 'admin';
   },
 };
-
-// Initialize with a default admin user for testing
-if (authService.getUsers().length === 0) {
-  authService.register('admin@medical.com', 'admin123', 'Admin User', 'admin');
-  authService.register('user@medical.com', 'user123', 'Regular User', 'user');
-}

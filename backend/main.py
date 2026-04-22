@@ -11,6 +11,7 @@ from typing import List, Optional
 import boto3
 from botocore.exceptions import ClientError
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -22,7 +23,7 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 # Config
 # ---------------------------------------------------------------------------
 
-SECRET_KEY = "change-me-in-production"
+SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production")
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_MINUTES = 60
 
@@ -44,6 +45,15 @@ class Base(DeclarativeBase):
     pass
 
 
+class UserModel(Base):
+    __tablename__ = "users"
+
+    username = Column(String, primary_key=True)
+    hashed_password = Column(String, nullable=False)
+    role = Column(String, nullable=False, default="user")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class DocumentModel(Base):
     __tablename__ = "documents"
 
@@ -54,32 +64,12 @@ class DocumentModel(Base):
     uploaded_at = Column(DateTime, default=datetime.utcnow)
 
 
-# Hardcoded users — no user table, just a dict for simplicity
-USERS_DB = {
-    "admin": {
-        "username": "admin",
-        "hashed_password": "",  # filled after pwd_context is ready
-        "role": "admin",
-    },
-    "user": {
-        "username": "user",
-        "hashed_password": "",
-        "role": "user",
-    },
-}
-
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
-
-
-def seed_users():
-    """Hash passwords for the hardcoded accounts at startup."""
-    USERS_DB["admin"]["hashed_password"] = pwd_context.hash("admin123")
-    USERS_DB["user"]["hashed_password"] = pwd_context.hash("user123")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
@@ -92,8 +82,10 @@ def create_token(data: dict) -> str:
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
-    """Decode JWT and return the user dict, or raise 401."""
+def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(lambda: next(get_db())),
+) -> UserModel:
     credentials_exc = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -102,16 +94,19 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: Optional[str] = payload.get("sub")
-        if username is None or username not in USERS_DB:
+        if not username:
             raise credentials_exc
     except JWTError:
         raise credentials_exc
-    return USERS_DB[username]
+
+    user = db.get(UserModel, username)
+    if not user:
+        raise credentials_exc
+    return user
 
 
-def require_admin(user: dict = Depends(get_current_user)) -> dict:
-    """Dependency that blocks non-admin users with 403."""
-    if user["role"] != "admin":
+def require_admin(user: UserModel = Depends(get_current_user)) -> UserModel:
+    if user.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins only")
     return user
 
@@ -131,7 +126,6 @@ def get_s3_client():
 
 
 def ensure_bucket(s3):
-    """Create the S3 bucket if it doesn't exist yet. Logs a warning if MinIO is unreachable."""
     try:
         s3.head_bucket(Bucket=S3_BUCKET)
     except ClientError as e:
@@ -139,10 +133,8 @@ def ensure_bucket(s3):
         if code in ("404", "NoSuchBucket"):
             s3.create_bucket(Bucket=S3_BUCKET)
         else:
-            # Any other ClientError (e.g. auth) is still a real problem
             raise
     except Exception as e:
-        # MinIO not running — warn but let the server start so auth endpoints work
         import logging
         logging.warning(f"Could not connect to MinIO at {S3_ENDPOINT}: {e}")
         logging.warning("Document endpoints will fail until MinIO is available.")
@@ -164,9 +156,23 @@ def get_db():
 # Pydantic schemas
 # ---------------------------------------------------------------------------
 
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class UserOut(BaseModel):
+    username: str
+    role: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 class DocumentOut(BaseModel):
@@ -189,38 +195,89 @@ class PresignedUrlOut(BaseModel):
 
 app = FastAPI(title="Diploma Document Service")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8080", "http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 @app.on_event("startup")
 def startup():
-    Base.metadata.create_all(bind=engine)  # create tables if they don't exist
-    seed_users()
+    Base.metadata.create_all(bind=engine)
+    _seed_admin_from_env()
     s3 = get_s3_client()
     ensure_bucket(s3)
+
+
+def _seed_admin_from_env():
+    """Create an admin user from env vars ADMIN_USERNAME / ADMIN_PASSWORD if not exists."""
+    username = os.getenv("ADMIN_USERNAME")
+    password = os.getenv("ADMIN_PASSWORD")
+    if not username or not password:
+        return
+    db = SessionLocal()
+    try:
+        if not db.get(UserModel, username):
+            db.add(UserModel(
+                username=username,
+                hashed_password=pwd_context.hash(password),
+                role="admin",
+            ))
+            db.commit()
+            import logging
+            logging.info(f"Admin user '{username}' created from env.")
+    finally:
+        db.close()
 
 
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
+@app.post("/auth/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+def register(body: RegisterRequest, db: Session = Depends(get_db)):
+    """Register a new user with role 'user'."""
+    if db.get(UserModel, body.username):
+        raise HTTPException(status_code=400, detail="Username already taken")
+    user = UserModel(
+        username=body.username,
+        hashed_password=pwd_context.hash(body.password),
+        role="user",
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 @app.post("/auth/login", response_model=TokenResponse)
-def login(form: OAuth2PasswordRequestForm = Depends()):
+def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """Authenticate with username + password, return a JWT."""
-    user = USERS_DB.get(form.username)
-    if not user or not verify_password(form.password, user["hashed_password"]):
+    user = db.get(UserModel, form.username)
+    if not user or not verify_password(form.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    token = create_token({"sub": user["username"], "role": user["role"]})
+    token = create_token({"sub": user.username, "role": user.role})
     return TokenResponse(access_token=token)
+
+
+@app.get("/auth/me", response_model=UserOut)
+def me(user: UserModel = Depends(get_current_user)):
+    """Return info about the currently authenticated user."""
+    return user
 
 
 @app.post("/documents", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
 def upload_document(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    admin: dict = Depends(require_admin),  # only admins can upload
+    admin: UserModel = Depends(require_admin),
 ):
     """Upload a PDF to S3 and record its metadata in the DB."""
     if not file.filename.lower().endswith(".pdf"):
@@ -237,7 +294,7 @@ def upload_document(
     doc = DocumentModel(
         filename=file.filename,
         s3_key=s3_key,
-        uploaded_by=admin["username"],
+        uploaded_by=admin.username,
     )
     db.add(doc)
     db.commit()
@@ -248,7 +305,7 @@ def upload_document(
 @app.get("/documents", response_model=List[DocumentOut])
 def list_documents(
     db: Session = Depends(get_db),
-    _: dict = Depends(get_current_user),  # any authenticated user
+    _: UserModel = Depends(get_current_user),
 ):
     """Return all documents stored in the DB."""
     return db.query(DocumentModel).all()
@@ -258,7 +315,7 @@ def list_documents(
 def get_document(
     doc_id: str,
     db: Session = Depends(get_db),
-    _: dict = Depends(get_current_user),
+    _: UserModel = Depends(get_current_user),
 ):
     """Return a presigned S3 URL valid for 1 hour so the client can download the file."""
     doc = db.get(DocumentModel, doc_id)
@@ -282,7 +339,7 @@ def get_document(
 def delete_document(
     doc_id: str,
     db: Session = Depends(get_db),
-    _: dict = Depends(require_admin),  # only admins can delete
+    _: UserModel = Depends(require_admin),
 ):
     """Delete a document from S3 and remove its DB record."""
     doc = db.get(DocumentModel, doc_id)
