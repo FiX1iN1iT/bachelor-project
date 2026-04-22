@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ArrowLeft, FileText, Layers, Loader2, ScanText } from "lucide-react";
+import { ArrowLeft, Download, FileText, Layers, Loader2, ScanText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type ChunkingState = "idle" | "llm-init" | "chunking" | "embedding" | "done" | "error";
@@ -128,6 +128,31 @@ const ViewDocument = () => {
     }
   };
 
+  const downloadText = (content: string, filename: string) => {
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = window.document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadParsed = () => {
+    if (!document) return;
+    downloadText(cleanedText, `${document.title}_parsed.txt`);
+  };
+
+  const handleDownloadChunks = () => {
+    if (!document || chunks.length === 0) return;
+    const content = chunks
+      .map((c, i) =>
+        `=== Чанк ${i + 1} (${c.text.split(/\s+/).filter(Boolean).length} слов, символы ${c.startIndex}–${c.endIndex}) ===\n${c.text}`
+      )
+      .join("\n\n");
+    downloadText(content, `${document.title}_chunks.txt`);
+  };
+
   const formatDate = (date: string) =>
     new Date(date).toLocaleDateString("ru-RU", {
       month: "long",
@@ -166,9 +191,15 @@ const ViewDocument = () => {
       {/* Document content */}
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-primary" />
-            <CardTitle>Содержимое документа</CardTitle>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              <CardTitle>Содержимое документа</CardTitle>
+            </div>
+            <Button variant="outline" size="sm" className="gap-2" onClick={handleDownloadParsed}>
+              <Download className="h-4 w-4" />
+              Скачать текст
+            </Button>
           </div>
           {document.isGeneral && (
             <CardDescription>
@@ -215,6 +246,11 @@ const ViewDocument = () => {
           )}
 
           {chunkingState === "done" && chunks.length > 0 && (
+            <>
+            <Button variant="outline" size="sm" className="gap-2" onClick={handleDownloadChunks}>
+              <Download className="h-4 w-4" />
+              Скачать чанки
+            </Button>
             <ScrollArea className="h-[520px] pr-3">
               <Accordion type="multiple" className="space-y-2">
                 {chunks.map((chunk, i) => (
@@ -248,6 +284,7 @@ const ViewDocument = () => {
                 ))}
               </Accordion>
             </ScrollArea>
+            </>
           )}
         </CardContent>
       </Card>
