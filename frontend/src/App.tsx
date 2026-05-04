@@ -14,7 +14,6 @@ import ViewDocument from "./pages/ViewDocument";
 import SharedDocuments from "./pages/SharedDocuments";
 import PublishDocument from "./pages/PublishDocument";
 import ViewSharedDocument from "./pages/ViewSharedDocument";
-import Profile from "./pages/Profile";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
@@ -36,8 +35,7 @@ const App = () => (
             <Route path="/documents" element={<Documents />} />
             <Route path="/documents/add" element={<AddDocument />} />
             <Route path="/documents/:documentId" element={<ViewDocument />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/shared-documents" element={<SharedDocuments />} />
+<Route path="/shared-documents" element={<SharedDocuments />} />
             <Route path="/shared-documents/publish" element={<PublishDocument />} />
             <Route path="/shared-documents/:docId" element={<ViewSharedDocument />} />
             <Route path="/admin" element={<Admin />} />

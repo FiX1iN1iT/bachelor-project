@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, Outlet } from "react-router-dom";
 import { authService, User } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Brain, MessageSquare, FileText, FolderOpen, User as UserIcon, Settings, LogOut } from "lucide-react";
+import { Brain, MessageSquare, FileText, FolderOpen, Settings, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 
 const Layout = () => {
@@ -70,24 +70,13 @@ const Layout = () => {
               <span>Общие документы</span>
             </NavLink>
 
-            {isAdmin && (
-              <NavLink
-                to="/admin"
-                className="flex items-center gap-2 px-4 py-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                activeClassName="bg-muted text-foreground"
-              >
-                <Settings className="h-4 w-4" />
-                <span>Админ</span>
-              </NavLink>
-            )}
-            
             <NavLink
-              to="/profile"
+              to="/admin"
               className="flex items-center gap-2 px-4 py-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               activeClassName="bg-muted text-foreground"
             >
-              <UserIcon className="h-4 w-4" />
-              <span>Профиль</span>
+              <Settings className="h-4 w-4" />
+              <span>Настройки</span>
             </NavLink>
 
             <Button variant="ghost" size="sm" onClick={handleLogout} className="ml-2">
