@@ -19,6 +19,7 @@ function buildRAGPrompt(context: string, question: string): string {
 
 export interface RAGSource {
   docId: string;
+  docTitle?: string;
   chunkIndex: number;
   preview: string;
 }
@@ -42,6 +43,7 @@ export async function answerWithRAG(
 
   const sources: RAGSource[] = chunks.map((c) => ({
     docId: c.docId,
+    docTitle: c.docTitle,
     chunkIndex: c.chunkIndex,
     preview: c.text.slice(0, 160).trimEnd(),
   }));

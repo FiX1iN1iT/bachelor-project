@@ -11,6 +11,7 @@ export interface Chat {
 
 export interface MessageSource {
   docId: string;
+  docTitle?: string;
   chunkIndex: number;
   preview: string;
 }
@@ -134,6 +135,11 @@ export const storageService = {
     }
     
     localStorage.setItem(DOCUMENTS_KEY, JSON.stringify(allDocs));
+  },
+
+  getAllDocuments(): Document[] {
+    const docs = localStorage.getItem(DOCUMENTS_KEY);
+    return docs ? JSON.parse(docs) : [];
   },
 
   deleteDocument(docId: string): void {

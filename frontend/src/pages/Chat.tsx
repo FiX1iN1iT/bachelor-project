@@ -39,12 +39,8 @@ const Chat = () => {
 
   useEffect(() => {
     if (!user) return;
-    const allDocs = [
-      ...storageService.getDocuments(user.id),
-      ...storageService.getGeneralDocuments(),
-    ];
     const map: Record<string, string> = {};
-    for (const d of allDocs) map[d.id] = d.title;
+    for (const d of storageService.getAllDocuments()) map[d.id] = d.title;
     setDocTitles(map);
   }, [user?.id]);
 
@@ -122,15 +118,9 @@ const Chat = () => {
     setInputValue("");
     setIsLoading(true);
 
-    if (messages.length === 0) {
-      const updatedChat = {
-        ...chat,
-        title: inputValue.slice(0, 50) + (inputValue.length > 50 ? '...' : ''),
-        updatedAt: new Date().toISOString(),
-      };
-      storageService.saveChat(updatedChat);
-      setChat(updatedChat);
-    }
+    const newTitle = messages.length === 0
+      ? inputValue.slice(0, 50) + (inputValue.length > 50 ? '...' : '')
+      : chat.title;
 
     const assistantMessage: Message = {
       id: crypto.randomUUID(),
@@ -164,7 +154,7 @@ const Chat = () => {
         prev.map(m => m.id === assistantMessage.id ? finalMessage : m)
       );
 
-      const updatedChat = { ...chat, updatedAt: new Date().toISOString() };
+      const updatedChat = { ...chat, title: newTitle, updatedAt: new Date().toISOString() };
       storageService.saveChat(updatedChat);
       setChat(updatedChat);
     } catch {
@@ -291,7 +281,7 @@ const Chat = () => {
                         {message.sources.map((src, i) => (
                           <li key={i} className="text-xs text-muted-foreground">
                             <span className="font-medium text-foreground">
-                              {i + 1}. {docTitles[src.docId] ?? src.docId}
+                              {i + 1}. {src.docTitle ?? docTitles[src.docId] ?? src.docId}
                             </span>
                             <span className="ml-1 opacity-60">
                               — {src.preview}{src.preview.length >= 160 ? '…' : ''}

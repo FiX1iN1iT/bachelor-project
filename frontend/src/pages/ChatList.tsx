@@ -4,13 +4,17 @@ import { authService } from "@/lib/auth";
 import { storageService, Chat } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, MessageSquare, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Plus, MessageSquare, Trash2, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const ChatList = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [chats, setChats] = useState<Chat[]>([]);
+  const [renamingChat, setRenamingChat] = useState<Chat | null>(null);
+  const [renameValue, setRenameValue] = useState('');
   const user = authService.getCurrentUser();
 
   useEffect(() => {
@@ -31,6 +35,20 @@ const ChatList = () => {
 
   const handleCreateChat = () => {
     navigate('/chat/new');
+  };
+
+  const handleRenameOpen = (chat: Chat, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRenamingChat(chat);
+    setRenameValue(chat.title);
+  };
+
+  const handleRenameConfirm = () => {
+    if (!renamingChat || !renameValue.trim()) return;
+    const updated = { ...renamingChat, title: renameValue.trim(), updatedAt: new Date().toISOString() };
+    storageService.saveChat(updated);
+    setChats(prev => prev.map(c => c.id === updated.id ? updated : c));
+    setRenamingChat(null);
   };
 
   const handleDeleteChat = (chatId: string, e: React.MouseEvent) => {
@@ -92,20 +110,47 @@ const ChatList = () => {
                       Обновлено {formatDate(chat.updatedAt)}
                     </CardDescription>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => handleDeleteChat(chat.id, e)}
-                    className="text-muted-foreground hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => handleRenameOpen(chat, e)}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => handleDeleteChat(chat.id, e)}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
             </Card>
           ))}
         </div>
       )}
+      <Dialog open={!!renamingChat} onOpenChange={(open) => !open && setRenamingChat(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Переименовать чат</DialogTitle>
+          </DialogHeader>
+          <Input
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleRenameConfirm()}
+            autoFocus
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenamingChat(null)}>Отмена</Button>
+            <Button onClick={handleRenameConfirm} disabled={!renameValue.trim()}>Сохранить</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

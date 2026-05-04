@@ -154,7 +154,7 @@ const ViewSharedDocument = () => {
         id: `${docId}::${c.id}`,
         content: c.text,
         embedding: embeddings[i],
-        metadata: { source: docId, chunkIndex: i },
+        metadata: { source: docId, chunkIndex: i, docTitle: doc.filename },
       }));
 
       await vectorStore.addChunks(vectorChunks);

@@ -9,6 +9,7 @@ export interface VectorChunk {
   metadata: {
     source: string;
     chunkIndex: number;
+    docTitle?: string;
   };
 }
 

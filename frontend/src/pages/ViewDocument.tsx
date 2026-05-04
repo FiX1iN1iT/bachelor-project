@@ -110,7 +110,7 @@ const ViewDocument = () => {
         id: `${document.id}::${c.id}`,
         content: c.text,
         embedding: embeddings[i],
-        metadata: { source: document.id, chunkIndex: i },
+        metadata: { source: document.id, chunkIndex: i, docTitle: document.title },
       }));
 
       await vectorStore.addChunks(vectorChunks);

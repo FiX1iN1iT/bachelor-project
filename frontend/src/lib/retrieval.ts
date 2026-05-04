@@ -5,6 +5,7 @@ import type { Chunk } from "@/lib/pdfExtractor";
 
 export interface RetrievedChunk extends Chunk {
   docId: string;
+  docTitle?: string;
   chunkIndex: number;
   score: number;
 }
@@ -20,6 +21,7 @@ export async function retrieveContext(query: string): Promise<RetrievedChunk[]> 
     startIndex: 0,
     endIndex: chunk.content.length,
     docId: chunk.metadata.source,
+    docTitle: chunk.metadata.docTitle,
     chunkIndex: chunk.metadata.chunkIndex,
     score,
   }));
