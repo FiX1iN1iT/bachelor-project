@@ -2,19 +2,23 @@ import {
   pipeline,
   type FeatureExtractionPipeline,
 } from "@huggingface/transformers";
-
-// ~120 MB ONNX model, 384-dim output, 50+ languages including Russian
-const MODEL_ID = "Xenova/paraphrase-multilingual-MiniLM-L12-v2";
+import { storageService } from "@/lib/storage";
 
 let extractor: FeatureExtractionPipeline | null = null;
+let loadedModelId: string | null = null;
 
 async function getExtractor(): Promise<FeatureExtractionPipeline> {
-  if (!extractor) {
-    extractor = await pipeline("feature-extraction", MODEL_ID, {
-      dtype: "fp32",
-    });
+  const modelId = storageService.getMLParams().retrieverModel;
+  if (!extractor || loadedModelId !== modelId) {
+    extractor = await pipeline("feature-extraction", modelId, { dtype: "fp32" });
+    loadedModelId = modelId;
   }
   return extractor;
+}
+
+export function resetExtractor(): void {
+  extractor = null;
+  loadedModelId = null;
 }
 
 /**

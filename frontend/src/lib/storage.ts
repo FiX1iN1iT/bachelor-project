@@ -48,11 +48,11 @@ const DOCUMENTS_KEY = 'medical_documents';
 const ML_PARAMS_KEY = 'medical_ml_params';
 
 const defaultMLParams: MLParams = {
-  retrieverModel: 'all-MiniLM-L6-v2',
+  retrieverModel: 'Xenova/paraphrase-multilingual-MiniLM-L12-v2',
   retrieverTopK: 5,
-  generatorModel: 'gpt-3.5-turbo',
-  generatorTemperature: 0.7,
-  generatorMaxTokens: 500,
+  generatorModel: 'Qwen2.5-7B-Instruct-q4f16_1-MLC',
+  generatorTemperature: 0.4,
+  generatorMaxTokens: 512,
 };
 
 export const storageService = {

@@ -3,9 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { authService } from "@/lib/auth";
 import { storageService, MLParams } from "@/lib/storage";
 import { vectorStore } from "@/lib/vectorStore";
+import { webLLMService } from "@/lib/webllm";
+import { resetExtractor } from "@/lib/embeddings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Trash2, Settings, Bug, User as UserIcon } from "lucide-react";
@@ -31,7 +35,16 @@ const Admin = () => {
   }, [user, navigate]);
 
   const handleSaveMLParams = () => {
+    const prev = storageService.getMLParams();
     storageService.saveMLParams(mlParams);
+
+    if (mlParams.generatorModel !== prev.generatorModel) {
+      webLLMService.reset();
+    }
+    if (mlParams.retrieverModel !== prev.retrieverModel) {
+      resetExtractor();
+    }
+
     toast({
       title: "Настройки сохранены",
       description: "Параметры ML моделей были обновлены.",
@@ -177,23 +190,25 @@ const Admin = () => {
                       <Input
                         id="retriever-model"
                         value={mlParams.retrieverModel}
-                        onChange={(e) => setMLParams({ ...mlParams, retrieverModel: e.target.value })}
-                        placeholder="например, all-MiniLM-L6-v2"
+                        disabled
+                        className="opacity-60 cursor-not-allowed"
                       />
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="retriever-topk">Top K результатов</Label>
-                      <Input
-                        id="retriever-topk"
-                        type="number"
-                        value={mlParams.retrieverTopK}
-                        onChange={(e) => setMLParams({ ...mlParams, retrieverTopK: parseInt(e.target.value) })}
-                        min="1"
-                        max="20"
+                      <div className="flex items-center justify-between">
+                        <Label>Top K результатов</Label>
+                        <span className="text-sm font-semibold tabular-nums">{mlParams.retrieverTopK}</span>
+                      </div>
+                      <Slider
+                        min={1}
+                        max={10}
+                        step={1}
+                        value={[mlParams.retrieverTopK]}
+                        onValueChange={([v]) => setMLParams({ ...mlParams, retrieverTopK: v })}
                       />
                       <p className="text-sm text-muted-foreground">
-                        Количество релевантных документов для извлечения (1-20)
+                        Количество релевантных фрагментов для извлечения (1–10)
                       </p>
                     </div>
                   </div>
@@ -202,28 +217,35 @@ const Admin = () => {
                     <h3 className="text-lg font-semibold text-foreground">Настройки Generator</h3>
 
                     <div className="space-y-2">
-                      <Label htmlFor="generator-model">Название модели</Label>
-                      <Input
-                        id="generator-model"
+                      <Label>Название модели</Label>
+                      <Select
                         value={mlParams.generatorModel}
-                        onChange={(e) => setMLParams({ ...mlParams, generatorModel: e.target.value })}
-                        placeholder="например, gpt-3.5-turbo"
-                      />
+                        onValueChange={(v) => setMLParams({ ...mlParams, generatorModel: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Qwen2.5-7B-Instruct-q4f16_1-MLC">Qwen2.5-7B-Instruct-q4f16_1-MLC</SelectItem>
+                          <SelectItem value="Qwen2.5-3B-Instruct-q4f16_1-MLC">Qwen2.5-3B-Instruct-q4f16_1-MLC</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="generator-temp">Температура</Label>
-                      <Input
-                        id="generator-temp"
-                        type="number"
-                        step="0.1"
-                        value={mlParams.generatorTemperature}
-                        onChange={(e) => setMLParams({ ...mlParams, generatorTemperature: parseFloat(e.target.value) })}
-                        min="0"
-                        max="2"
+                      <div className="flex items-center justify-between">
+                        <Label>Температура</Label>
+                        <span className="text-sm font-semibold tabular-nums">{mlParams.generatorTemperature.toFixed(1)}</span>
+                      </div>
+                      <Slider
+                        min={0}
+                        max={1}
+                        step={0.1}
+                        value={[mlParams.generatorTemperature]}
+                        onValueChange={([v]) => setMLParams({ ...mlParams, generatorTemperature: v })}
                       />
                       <p className="text-sm text-muted-foreground">
-                        Контролирует случайность (0-2, меньше = более точно)
+                        Контролирует случайность (0.0 = точнее, 1.0 = креативнее)
                       </p>
                     </div>
 
@@ -238,7 +260,7 @@ const Admin = () => {
                         max="4000"
                       />
                       <p className="text-sm text-muted-foreground">
-                        Максимальная длина ответа (100-4000)
+                        Максимальная длина ответа (100–4000)
                       </p>
                     </div>
                   </div>

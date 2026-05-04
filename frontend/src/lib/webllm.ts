@@ -1,11 +1,10 @@
 import * as webllm from "@mlc-ai/web-llm";
+import { storageService } from "@/lib/storage";
 
 export type InitProgressCallback = (progress: webllm.InitProgressReport) => void;
 
 const SYSTEM_PROMPT = `Ты — медицинский ИИ-ассистент. Отвечай ТОЛЬКО на русском языке. Никогда не используй английский, латиницу или любые другие языки и символы.
 Отвечай кратко и по существу. Давай конкретные советы. Всегда напоминай, что твои ответы носят информационный характер и не заменяют консультацию врача.`;
-
-const MODEL_ID = "Qwen2.5-7B-Instruct-q4f16_1-MLC";
 
 let engine: webllm.MLCEngine | null = null;
 let isInitializing = false;
@@ -26,7 +25,7 @@ export const webLLMService = {
     isInitializing = true;
     try {
       engine = new webllm.MLCEngine({ initProgressCallback: onProgress });
-      await engine.reload(MODEL_ID);
+      await engine.reload(storageService.getMLParams().generatorModel);
       isInitialized = true;
     } finally {
       isInitializing = false;
@@ -46,11 +45,11 @@ export const webLLMService = {
       ...messages,
     ];
 
+    const { generatorTemperature, generatorMaxTokens } = storageService.getMLParams();
     const params = {
       messages: chatMessages,
-    //   max_tokens: 512,
-    //   temperature: 0.4,
-    //   repetition_penalty: 1.1,
+      temperature: generatorTemperature,
+      max_tokens: generatorMaxTokens,
     };
 
     if (onChunk) {
@@ -99,9 +98,13 @@ export const webLLMService = {
       throw new Error("WebLLM engine not initialized");
     }
 
+    const { generatorTemperature: temperature, generatorMaxTokens: max_tokens } = storageService.getMLParams();
+
     if (onChunk) {
       const stream = await engine.chat.completions.create({
         messages,
+        temperature,
+        max_tokens,
         stream: true,
       });
       let full = "";
@@ -115,7 +118,7 @@ export const webLLMService = {
       return full;
     }
 
-    const reply = await engine.chat.completions.create({ messages });
+    const reply = await engine.chat.completions.create({ messages, temperature, max_tokens });
     return reply.choices[0]?.message?.content ?? "";
   },
 

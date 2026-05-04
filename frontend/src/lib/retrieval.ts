@@ -1,8 +1,7 @@
 import { embedText } from "@/lib/embeddings";
 import { vectorStore } from "@/lib/vectorStore";
+import { storageService } from "@/lib/storage";
 import type { Chunk } from "@/lib/pdfExtractor";
-
-const TOP_K = 5;
 
 export interface RetrievedChunk extends Chunk {
   docId: string;
@@ -12,7 +11,8 @@ export interface RetrievedChunk extends Chunk {
 
 export async function retrieveContext(query: string): Promise<RetrievedChunk[]> {
   const queryEmbedding = await embedText(query);
-  const results = await vectorStore.search(queryEmbedding, TOP_K);
+  const { retrieverTopK } = storageService.getMLParams();
+  const results = await vectorStore.search(queryEmbedding, retrieverTopK);
 
   return results.map(({ chunk, score }) => ({
     id: chunk.id,
