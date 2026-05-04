@@ -1,7 +1,8 @@
-import { useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { authService } from "@/lib/auth";
 import { storageService, Document } from "@/lib/storage";
+import { apiService } from "@/lib/api";
 import { extractTextFromPDF, cleanMedicalText } from "@/lib/pdfExtractor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,21 +11,30 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ArrowLeft, FileText, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-interface AddDocumentProps {
-  isAdmin?: boolean;
-}
+const SHARED_TITLE_KEY = (id: string) => `shared_title_${id}`;
 
-const AddDocument = ({ isAdmin = false }: AddDocumentProps) => {
+const AddDocument = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const user = authService.getCurrentUser();
+  const isAdmin = authService.isAdmin(user);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const type = searchParams.get("type") === "shared" ? "shared" : "personal";
+  const backUrl = type === "shared" ? "/documents?tab=shared" : "/documents?tab=personal";
 
   const [title, setTitle] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (type === "shared" && !isAdmin) {
+      navigate("/documents?tab=shared");
+    }
+  }, [type, isAdmin, navigate]);
 
   const handleFile = (file: File) => {
     if (file.type !== "application/pdf") {
@@ -64,74 +74,73 @@ const AddDocument = ({ isAdmin = false }: AddDocumentProps) => {
     e.preventDefault();
     if (!user || !selectedFile) return;
 
-    setIsExtracting(true);
-    let content: string;
-
-    try {
-      content = cleanMedicalText(await extractTextFromPDF(selectedFile));
-    } catch {
-      toast({
-        title: "Ошибка извлечения",
-        description: "Не удалось извлечь текст из PDF.",
-        variant: "destructive",
-      });
+    if (type === "personal") {
+      setIsExtracting(true);
+      let content: string;
+      try {
+        content = cleanMedicalText(await extractTextFromPDF(selectedFile));
+      } catch {
+        toast({ title: "Ошибка извлечения", description: "Не удалось извлечь текст из PDF.", variant: "destructive" });
+        setIsExtracting(false);
+        return;
+      }
       setIsExtracting(false);
-      return;
-    }
-
-    setIsExtracting(false);
-    setIsSaving(true);
-
-    try {
-      const newDoc: Document = {
-        id: crypto.randomUUID(),
-        userId: user.id,
-        title: title.trim(),
-        content,
-        fileType: "PDF",
-        uploadedAt: new Date().toISOString(),
-        isGeneral: isAdmin,
-      };
-
-      storageService.saveDocument(newDoc);
-
-      toast({
-        title: "Документ загружен",
-        description: "Ваш документ был успешно сохранён.",
-      });
-
-      navigate(isAdmin ? "/admin/documents" : "/documents");
-    } catch {
-      toast({
-        title: "Ошибка",
-        description: "Не удалось сохранить документ.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSaving(false);
+      setIsSaving(true);
+      try {
+        const newDoc: Document = {
+          id: crypto.randomUUID(),
+          userId: user.id,
+          title: title.trim(),
+          content,
+          fileType: "PDF",
+          uploadedAt: new Date().toISOString(),
+          isGeneral: false,
+        };
+        storageService.saveDocument(newDoc);
+        toast({ title: "Документ загружен", description: "Ваш документ был успешно сохранён." });
+        navigate(backUrl);
+      } catch {
+        toast({ title: "Ошибка", description: "Не удалось сохранить документ.", variant: "destructive" });
+      } finally {
+        setIsSaving(false);
+      }
+    } else {
+      setIsSaving(true);
+      try {
+        const sharedDoc = await apiService.uploadDocument(selectedFile);
+        if (title.trim()) {
+          localStorage.setItem(SHARED_TITLE_KEY(sharedDoc.id), title.trim());
+        }
+        toast({ title: "Документ опубликован", description: "Документ успешно опубликован для всех пользователей." });
+        navigate(backUrl);
+      } catch (err) {
+        toast({
+          title: "Ошибка публикации",
+          description: err instanceof Error ? err.message : "Не удалось опубликовать документ.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
   const isLoading = isExtracting || isSaving;
-  const loadingLabel = isExtracting ? "Извлечение текста..." : "Сохранение...";
+  const loadingLabel = isExtracting ? "Извлечение текста..." : type === "shared" ? "Загрузка на сервер..." : "Сохранение...";
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => navigate(isAdmin ? "/admin/documents" : "/documents")}
-        >
+        <Button variant="ghost" size="icon" onClick={() => navigate(backUrl)}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
           <h1 className="text-3xl font-bold text-foreground">
-            {isAdmin ? "Добавить общий медицинский документ" : "Загрузить документ"}
+            {type === "shared" ? "Опубликовать общий документ" : "Загрузить документ"}
           </h1>
           <p className="text-muted-foreground mt-1">
-            {isAdmin
-              ? "Добавьте документ в общую медицинскую базу знаний"
+            {type === "shared"
+              ? "Документ будет доступен всем пользователям системы"
               : "Добавьте новый медицинский документ в вашу коллекцию"}
           </p>
         </div>
@@ -140,7 +149,7 @@ const AddDocument = ({ isAdmin = false }: AddDocumentProps) => {
       <Card>
         <CardHeader>
           <CardTitle>Загрузка PDF</CardTitle>
-          <CardDescription>Выберите PDF-файл для извлечения текста</CardDescription>
+          <CardDescription>Выберите PDF-файл для {type === "shared" ? "публикации" : "извлечения текста"}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -151,8 +160,13 @@ const AddDocument = ({ isAdmin = false }: AddDocumentProps) => {
                 placeholder="например, Результаты анализов — Январь 2024"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                required
+                required={type === "personal"}
               />
+              {type === "shared" && (
+                <p className="text-xs text-muted-foreground">
+                  Необязательно — если оставить пустым, будет использоваться имя файла
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -196,13 +210,9 @@ const AddDocument = ({ isAdmin = false }: AddDocumentProps) => {
             <div className="flex gap-3">
               <Button type="submit" disabled={isLoading || !selectedFile}>
                 <Upload className="h-4 w-4 mr-2" />
-                {isLoading ? loadingLabel : "Загрузить документ"}
+                {isLoading ? loadingLabel : type === "shared" ? "Опубликовать" : "Загрузить документ"}
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => navigate(isAdmin ? "/admin/documents" : "/documents")}
-              >
+              <Button type="button" variant="outline" onClick={() => navigate(backUrl)}>
                 Отмена
               </Button>
             </div>

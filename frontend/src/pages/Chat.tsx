@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { authService } from "@/lib/auth";
 import { storageService, Chat as ChatType, Message } from "@/lib/storage";
 import { webLLMService } from "@/lib/webllm";
@@ -280,9 +280,12 @@ const Chat = () => {
                       <ol className="space-y-1">
                         {message.sources.map((src, i) => (
                           <li key={i} className="text-xs text-muted-foreground">
-                            <span className="font-medium text-foreground">
+                            <Link
+                              to={`/documents/${src.docId}`}
+                              className="font-medium text-foreground hover:underline hover:text-primary"
+                            >
                               {i + 1}. {src.docTitle ?? docTitles[src.docId] ?? src.docId}
-                            </span>
+                            </Link>
                             <span className="ml-1 opacity-60">
                               — {src.preview}{src.preview.length >= 160 ? '…' : ''}
                             </span>

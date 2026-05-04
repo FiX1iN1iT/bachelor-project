@@ -11,9 +11,6 @@ import Chat from "./pages/Chat";
 import Documents from "./pages/Documents";
 import AddDocument from "./pages/AddDocument";
 import ViewDocument from "./pages/ViewDocument";
-import SharedDocuments from "./pages/SharedDocuments";
-import PublishDocument from "./pages/PublishDocument";
-import ViewSharedDocument from "./pages/ViewSharedDocument";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
@@ -28,20 +25,16 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/auth" element={<Auth />} />
-          
+
           <Route element={<Layout />}>
             <Route path="/chats" element={<ChatList />} />
             <Route path="/chat/:chatId" element={<Chat />} />
             <Route path="/documents" element={<Documents />} />
             <Route path="/documents/add" element={<AddDocument />} />
             <Route path="/documents/:documentId" element={<ViewDocument />} />
-<Route path="/shared-documents" element={<SharedDocuments />} />
-            <Route path="/shared-documents/publish" element={<PublishDocument />} />
-            <Route path="/shared-documents/:docId" element={<ViewSharedDocument />} />
             <Route path="/admin" element={<Admin />} />
-            <Route path="/admin/documents/add" element={<AddDocument isAdmin />} />
           </Route>
-          
+
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
