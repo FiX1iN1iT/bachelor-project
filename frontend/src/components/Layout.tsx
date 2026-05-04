@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, Outlet } from "react-router-dom";
 import { authService, User } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Brain, MessageSquare, FileText, User as UserIcon, Settings, LogOut } from "lucide-react";
+import { Brain, MessageSquare, FileText, FolderOpen, User as UserIcon, Settings, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 
 const Layout = () => {
@@ -59,6 +59,15 @@ const Layout = () => {
             >
               <FileText className="h-4 w-4" />
               <span>Мои документы</span>
+            </NavLink>
+
+            <NavLink
+              to="/shared-documents"
+              className="flex items-center gap-2 px-4 py-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              activeClassName="bg-muted text-foreground"
+            >
+              <FolderOpen className="h-4 w-4" />
+              <span>Общие документы</span>
             </NavLink>
 
             {isAdmin && (
