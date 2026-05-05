@@ -33,7 +33,7 @@ const Documents = () => {
 
   useEffect(() => {
     if (user) loadPersonalDocs();
-  }, [user]);
+  }, [user?.id]);
 
   useEffect(() => {
     if (defaultTab === "shared" && !hasLoadedShared.current) {
