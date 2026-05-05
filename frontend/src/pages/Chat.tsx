@@ -127,7 +127,7 @@ const Chat = () => {
       chatId: chat.id,
       role: 'assistant',
       content: "",
-      timestamp: new Date().toISOString(),
+      timestamp: "",
     };
     setMessages(prev => [...prev, assistantMessage]);
 
@@ -148,6 +148,7 @@ const Chat = () => {
         ...assistantMessage,
         content: answer,
         sources: sources.length > 0 ? sources : undefined,
+        timestamp: new Date().toISOString(),
       };
       storageService.saveMessage(finalMessage);
       setMessages(prev =>
@@ -295,9 +296,11 @@ const Chat = () => {
                     </div>
                   )}
 
-                  <p className="text-xs opacity-50">
-                    {new Date(message.timestamp).toLocaleTimeString('ru-RU')}
-                  </p>
+                  {message.timestamp && (
+                    <p className="text-xs opacity-50">
+                      {new Date(message.timestamp).toLocaleTimeString('ru-RU')}
+                    </p>
+                  )}
                 </div>
               </div>
             ))}
