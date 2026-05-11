@@ -214,19 +214,19 @@ const Chat = () => {
       {/* Debug panel */}
       {debugOpen && (
         <Card className="mb-4 p-4 space-y-3 border-dashed border-yellow-500/50 bg-yellow-500/5 text-xs font-mono">
-          <p className="font-semibold text-sm font-sans">Debug</p>
+          <p className="font-semibold text-sm font-sans">Отладка</p>
           <p>
-            <span className="text-muted-foreground">IndexedDB chunks total: </span>
+            <span className="text-muted-foreground">Всего чанков в IndexedDB: </span>
             <span className="font-bold">{dbCount ?? '…'}</span>
           </p>
           <div>
-            <p className="text-muted-foreground mb-1">Last RAG context passed to WebLLM:</p>
+            <p className="text-muted-foreground mb-1">Последний RAG-контекст, переданный в WebLLM:</p>
             {lastContext ? (
               <ScrollArea className="h-48 rounded border border-border bg-muted p-2">
                 <pre className="whitespace-pre-wrap text-xs">{lastContext}</pre>
               </ScrollArea>
             ) : (
-              <p className="text-muted-foreground italic">No query sent yet</p>
+              <p className="text-muted-foreground italic">Запросов ещё не было</p>
             )}
           </div>
         </Card>

@@ -8,7 +8,7 @@ export function buildContext(chunks: Chunk[]): string {
   let total = 0;
 
   for (let i = 0; i < chunks.length; i++) {
-    const header = `[Source ${i + 1}]`;
+    const header = `[Источник ${i + 1}]`;
     const block = `${header}\n${chunks[i].text}`;
     const blockLen = block.length + 2; // +2 for the separator newline
 
