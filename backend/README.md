@@ -40,7 +40,7 @@ Swagger-документация: http://127.0.0.1:8000/docs
 **Через env-переменные при запуске** (создаётся один раз, если пользователя ещё нет):
 
 ```bash
-ADMIN_USERNAME=admin ADMIN_PASSWORD=secret uvicorn main:app --reload
+ADMIN_USERNAME=admin ADMIN_PASSWORD=admin uvicorn main:app --reload
 ```
 
 ---

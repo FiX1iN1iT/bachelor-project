@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authService } from "@/lib/auth";
+import { apiService } from "@/lib/api";
 import { storageService, MLParams } from "@/lib/storage";
 import { vectorStore } from "@/lib/vectorStore";
 import { webLLMService } from "@/lib/webllm";
@@ -23,10 +24,7 @@ const Admin = () => {
   const [mlParams, setMLParams] = useState<MLParams>(storageService.getMLParams());
   const [vectorCount, setVectorCount] = useState<number | null>(null);
   const [isClearing, setIsClearing] = useState(false);
-  const [formData, setFormData] = useState({
-    name: user?.name || '',
-    email: user?.email || '',
-  });
+  const [fullName, setFullName] = useState(user?.fullName ?? '');
 
   useEffect(() => {
     if (!user) {
@@ -51,12 +49,16 @@ const Admin = () => {
     });
   };
 
-  const handleProfileSubmit = (e: React.FormEvent) => {
+  const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast({
-      title: "Профиль обновлён",
-      description: "Ваша информация была успешно сохранена.",
-    });
+    try {
+      await apiService.updateProfile(fullName);
+      const updated = { ...user!, fullName };
+      localStorage.setItem('auth_user', JSON.stringify(updated));
+      toast({ title: "Профиль обновлён", description: "Ваша информация была успешно сохранена." });
+    } catch {
+      toast({ title: "Ошибка", description: "Не удалось сохранить профиль.", variant: "destructive" });
+    }
   };
 
   const loadVectorCount = async () => {
@@ -110,31 +112,30 @@ const Admin = () => {
                   <UserIcon className="h-6 w-6 text-primary-foreground" />
                 </div>
                 <div>
-                  <CardTitle>{user.name}</CardTitle>
-                  <CardDescription>{user.email}</CardDescription>
+                  <CardTitle>{fullName || user.id}</CardTitle>
+                  <CardDescription>{user.id}</CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleProfileSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Полное имя</Label>
+                  <Label htmlFor="username">Имя пользователя</Label>
                   <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Ваше имя"
+                    id="username"
+                    value={user.id}
+                    disabled
+                    className="opacity-60 cursor-not-allowed"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="email">Электронная почта</Label>
+                  <Label htmlFor="fullName">Полное имя</Label>
                   <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="ваш@email.ru"
+                    id="fullName"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Иван Иванов"
                   />
                 </div>
 
@@ -156,7 +157,7 @@ const Admin = () => {
                   {isAdmin ? 'Администратор' : 'Обычный пользователь'}
                 </span>
               </div>
-              <div className="flex justify-between py-2 border-b border-border">
+              <div className="flex justify-between py-2">
                 <span className="text-muted-foreground">Дата регистрации</span>
                 <span className="font-medium">
                   {new Date(user.createdAt).toLocaleDateString('ru-RU', {
@@ -164,10 +165,6 @@ const Admin = () => {
                     year: 'numeric',
                   })}
                 </span>
-              </div>
-              <div className="flex justify-between py-2">
-                <span className="text-muted-foreground">ID пользователя</span>
-                <span className="font-mono text-sm">{user.id}</span>
               </div>
             </CardContent>
           </Card>

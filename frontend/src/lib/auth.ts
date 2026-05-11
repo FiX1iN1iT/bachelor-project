@@ -2,8 +2,7 @@ export type UserRole = 'user' | 'admin';
 
 export interface User {
   id: string;
-  email: string;
-  name: string;
+  fullName: string;
   role: UserRole;
   createdAt: string;
 }
@@ -45,11 +44,11 @@ export const authService = {
     const payload = decodeJwtPayload(access_token);
     const sub = payload['sub'] as string;
     const role = (payload['role'] as UserRole) ?? 'user';
+    const fullName = (payload['full_name'] as string) ?? '';
 
     const user: User = {
       id: sub,
-      email: sub,
-      name: sub,
+      fullName,
       role,
       createdAt: new Date().toISOString(),
     };
@@ -59,11 +58,11 @@ export const authService = {
     return user;
   },
 
-  async register(username: string, password: string): Promise<void> {
+  async register(username: string, password: string, fullName: string): Promise<void> {
     const res = await fetch(`${API_BASE}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, full_name: fullName }),
     });
 
     if (!res.ok) {

@@ -219,7 +219,7 @@ const Documents = () => {
                             {displayTitle}
                           </CardTitle>
                           <CardDescription>
-                            PDF • Опубликовано {formatDate(doc.uploaded_at)} • {doc.uploaded_by}
+                            PDF • Опубликовано {formatDate(doc.uploaded_at)} • {doc.uploaded_by_full_name || doc.uploaded_by}
                           </CardDescription>
                         </div>
                         <div className="flex gap-2">

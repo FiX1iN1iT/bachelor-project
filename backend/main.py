@@ -51,6 +51,7 @@ class UserModel(Base):
     username = Column(String, primary_key=True)
     hashed_password = Column(String, nullable=False)
     role = Column(String, nullable=False, default="user")
+    full_name = Column(String, nullable=False, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -159,6 +160,7 @@ def get_db():
 class RegisterRequest(BaseModel):
     username: str
     password: str
+    full_name: str = ""
 
 
 class TokenResponse(BaseModel):
@@ -169,16 +171,22 @@ class TokenResponse(BaseModel):
 class UserOut(BaseModel):
     username: str
     role: str
+    full_name: str
     created_at: datetime
 
     class Config:
         from_attributes = True
 
 
+class UpdateProfileRequest(BaseModel):
+    full_name: str
+
+
 class DocumentOut(BaseModel):
     id: str
     filename: str
     uploaded_by: str
+    uploaded_by_full_name: str = ""
     uploaded_at: datetime
 
     class Config:
@@ -246,6 +254,7 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)):
         username=body.username,
         hashed_password=pwd_context.hash(body.password),
         role="user",
+        full_name=body.full_name,
     )
     db.add(user)
     db.commit()
@@ -263,7 +272,7 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    token = create_token({"sub": user.username, "role": user.role})
+    token = create_token({"sub": user.username, "role": user.role, "full_name": user.full_name})
     return TokenResponse(access_token=token)
 
 
@@ -308,7 +317,33 @@ def list_documents(
     _: UserModel = Depends(get_current_user),
 ):
     """Return all documents stored in the DB."""
-    return db.query(DocumentModel).all()
+    docs = db.query(DocumentModel).all()
+    result = []
+    for doc in docs:
+        uploader = db.get(UserModel, doc.uploaded_by)
+        full_name = uploader.full_name if uploader else ""
+        result.append(DocumentOut(
+            id=doc.id,
+            filename=doc.filename,
+            uploaded_by=doc.uploaded_by,
+            uploaded_by_full_name=full_name,
+            uploaded_at=doc.uploaded_at,
+        ))
+    return result
+
+
+@app.put("/auth/profile", response_model=UserOut)
+def update_profile(
+    body: UpdateProfileRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
+    """Update the current user's full name."""
+    user = db.get(UserModel, current_user.username)
+    user.full_name = body.full_name
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 @app.get("/documents/{doc_id}", response_model=PresignedUrlOut)

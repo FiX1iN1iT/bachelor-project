@@ -18,6 +18,7 @@ const Auth = () => {
 
   const [formData, setFormData] = useState({
     username: '',
+    fullName: '',
     password: '',
   });
 
@@ -27,7 +28,7 @@ const Auth = () => {
 
     try {
       if (isRegister) {
-        await authService.register(formData.username, formData.password);
+        await authService.register(formData.username, formData.password, formData.fullName);
         toast({
           title: "Аккаунт создан!",
           description: "Пожалуйста, войдите с вашими данными.",
@@ -37,7 +38,7 @@ const Auth = () => {
         const user = await authService.login(formData.username, formData.password);
         toast({
           title: "С возвращением!",
-          description: `Вы вошли как ${user.name}`,
+          description: `Вы вошли как ${user.fullName || user.id}`,
         });
         navigate('/chats');
       }
@@ -81,6 +82,19 @@ const Auth = () => {
                 required
               />
             </div>
+
+            {isRegister && (
+              <div className="space-y-2">
+                <Label htmlFor="fullName">Полное имя</Label>
+                <Input
+                  id="fullName"
+                  type="text"
+                  placeholder="Иван Иванов"
+                  value={formData.fullName}
+                  onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                />
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="password">Пароль</Label>
