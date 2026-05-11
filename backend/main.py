@@ -16,7 +16,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
-from sqlalchemy import Column, DateTime, String, create_engine
+from sqlalchemy import Column, DateTime, String, create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 # ---------------------------------------------------------------------------
@@ -60,6 +60,7 @@ class DocumentModel(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     filename = Column(String, nullable=False)
+    title = Column(String, nullable=True)
     s3_key = Column(String, nullable=False, unique=True)
     uploaded_by = Column(String, nullable=False)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
@@ -185,12 +186,17 @@ class UpdateProfileRequest(BaseModel):
 class DocumentOut(BaseModel):
     id: str
     filename: str
+    title: Optional[str] = None
     uploaded_by: str
     uploaded_by_full_name: str = ""
     uploaded_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class UpdateDocumentTitleRequest(BaseModel):
+    title: str
 
 
 class PresignedUrlOut(BaseModel):
@@ -325,6 +331,7 @@ def list_documents(
         result.append(DocumentOut(
             id=doc.id,
             filename=doc.filename,
+            title=doc.title,
             uploaded_by=doc.uploaded_by,
             uploaded_by_full_name=full_name,
             uploaded_at=doc.uploaded_at,
@@ -368,6 +375,32 @@ def get_document(
         raise HTTPException(status_code=500, detail=f"Could not generate URL: {e}")
 
     return PresignedUrlOut(url=url)
+
+
+@app.patch("/documents/{doc_id}", response_model=DocumentOut)
+def update_document_title(
+    doc_id: str,
+    body: UpdateDocumentTitleRequest,
+    db: Session = Depends(get_db),
+    admin: UserModel = Depends(require_admin),
+):
+    """Update the display title of a document (admin only)."""
+    doc = db.get(DocumentModel, doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    doc.title = body.title
+    db.commit()
+    db.refresh(doc)
+    uploader = db.get(UserModel, doc.uploaded_by)
+    full_name = uploader.full_name if uploader else ""
+    return DocumentOut(
+        id=doc.id,
+        filename=doc.filename,
+        title=doc.title,
+        uploaded_by=doc.uploaded_by,
+        uploaded_by_full_name=full_name,
+        uploaded_at=doc.uploaded_at,
+    )
 
 
 @app.delete("/documents/{doc_id}", status_code=status.HTTP_204_NO_CONTENT)

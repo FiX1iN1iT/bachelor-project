@@ -6,11 +6,94 @@ import { apiService, SharedDocument } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, FileText, Trash2, Eye, Loader2 } from "lucide-react";
+import { Plus, FileText, Trash2, Pencil, Loader2 } from "lucide-react";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 
 const SHARED_TITLE_KEY = (id: string) => `shared_title_${id}`;
 const SHARED_PARSED_KEY = (id: string) => `shared_doc_parsed_${id}`;
+
+const DocumentCard = ({
+  title,
+  description,
+  onClick,
+  onRename,
+  onDelete,
+  deleteLoading,
+}: {
+  title: string;
+  description: string;
+  onClick: () => void;
+  onRename?: () => void;
+  onDelete?: () => void;
+  deleteLoading?: boolean;
+}) => (
+  <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={onClick}>
+    <CardHeader>
+      <div className="flex justify-between items-start">
+        <div className="flex-1">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <FileText className="h-5 w-5 text-primary" />
+            {title}
+          </CardTitle>
+          <CardDescription>{description}</CardDescription>
+        </div>
+        <div className="flex gap-1">
+          {onRename && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={(e) => { e.stopPropagation(); onRename(); }}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          )}
+          {onDelete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              disabled={deleteLoading}
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              {deleteLoading
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : <Trash2 className="h-4 w-4" />}
+            </Button>
+          )}
+        </div>
+      </div>
+    </CardHeader>
+  </Card>
+);
+
+const EmptyState = ({
+  message,
+  hint,
+  actionLabel,
+  onAction,
+}: {
+  message: string;
+  hint: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) => (
+  <Card>
+    <CardContent className="flex flex-col items-center justify-center py-12">
+      <FileText className="h-16 w-16 text-muted-foreground mb-4" />
+      <h3 className="text-xl font-semibold text-foreground mb-2">{message}</h3>
+      <p className="text-muted-foreground mb-4">{hint}</p>
+      {actionLabel && onAction && (
+        <Button onClick={onAction}>
+          <Plus className="h-4 w-4 mr-2" />
+          {actionLabel}
+        </Button>
+      )}
+    </CardContent>
+  </Card>
+);
 
 const Documents = () => {
   const navigate = useNavigate();
@@ -30,6 +113,10 @@ const Documents = () => {
   const [sharedLoading, setSharedLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const hasLoadedShared = useRef(false);
+
+  // Rename
+  const [renamingDoc, setRenamingDoc] = useState<{ id: string; title: string; type: "personal" | "shared" } | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   useEffect(() => {
     if (user) loadPersonalDocs();
@@ -82,8 +169,7 @@ const Documents = () => {
     toast({ title: "Документ удалён", description: "Документ был успешно удалён." });
   };
 
-  const handleDeleteShared = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDeleteShared = async (id: string) => {
     setDeletingId(id);
     try {
       await apiService.deleteDocument(id);
@@ -96,6 +182,27 @@ const Documents = () => {
     } finally {
       setDeletingId(null);
     }
+  };
+
+  const handleRenameConfirm = async () => {
+    if (!renamingDoc || !renameValue.trim()) return;
+    const trimmed = renameValue.trim();
+    if (renamingDoc.type === "personal") {
+      const doc = documents.find(d => d.id === renamingDoc.id);
+      if (doc) {
+        storageService.saveDocument({ ...doc, title: trimmed });
+        loadPersonalDocs();
+      }
+    } else {
+      try {
+        const updated = await apiService.updateDocumentTitle(renamingDoc.id, trimmed);
+        localStorage.setItem(SHARED_TITLE_KEY(renamingDoc.id), trimmed);
+        setSharedDocs(prev => prev.map(d => d.id === updated.id ? updated : d));
+      } catch {
+        toast({ title: "Ошибка переименования", description: "Не удалось обновить название документа.", variant: "destructive" });
+      }
+    }
+    setRenamingDoc(null);
   };
 
   const formatDate = (date: string) =>
@@ -127,132 +234,77 @@ const Documents = () => {
           <TabsTrigger value="shared">Общие документы</TabsTrigger>
         </TabsList>
 
-        {/* Personal docs tab */}
         <TabsContent value="personal" className="mt-4">
           {documents.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <FileText className="h-16 w-16 text-muted-foreground mb-4" />
-                <h3 className="text-xl font-semibold text-foreground mb-2">Пока нет документов</h3>
-                <p className="text-muted-foreground mb-4">Загрузите ваши медицинские документы, чтобы начать</p>
-                <Button onClick={() => navigate("/documents/add?type=personal")}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Загрузить первый документ
-                </Button>
-              </CardContent>
-            </Card>
+            <EmptyState
+              message="Пока нет документов"
+              hint="Загрузите ваши медицинские документы, чтобы начать"
+              actionLabel="Загрузить первый документ"
+              onAction={() => navigate("/documents/add?type=personal")}
+            />
           ) : (
             <div className="grid gap-4">
               {documents.map((doc) => (
-                <Card key={doc.id} className="hover:shadow-md transition-shadow">
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          <FileText className="h-5 w-5 text-primary" />
-                          {doc.title}
-                        </CardTitle>
-                        <CardDescription>
-                          {doc.fileType} • Загружено {formatDate(doc.uploadedAt)}
-                        </CardDescription>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => navigate(`/documents/${doc.id}`)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDeletePersonal(doc.id)}
-                          className="text-muted-foreground hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                </Card>
+                <DocumentCard
+                  key={doc.id}
+                  title={doc.title}
+                  description={`${doc.fileType} • Загружено ${formatDate(doc.uploadedAt)}`}
+                  onClick={() => navigate(`/documents/${doc.id}`)}
+                  onRename={() => { setRenamingDoc({ id: doc.id, title: doc.title, type: "personal" }); setRenameValue(doc.title); }}
+                  onDelete={() => handleDeletePersonal(doc.id)}
+                />
               ))}
             </div>
           )}
         </TabsContent>
 
-        {/* Shared docs tab */}
         <TabsContent value="shared" className="mt-4">
           {sharedLoading ? (
             <div className="flex justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : sharedDocs.length === 0 ? (
-            <Card>
-              <CardHeader className="flex flex-col items-center py-12">
-                <FileText className="h-16 w-16 text-muted-foreground mb-4" />
-                <CardTitle className="text-xl mb-2">Пока нет документов</CardTitle>
-                <CardDescription>
-                  {isAdmin
-                    ? "Опубликуйте первый общий документ"
-                    : "Администратор ещё не опубликовал ни одного документа"}
-                </CardDescription>
-                {isAdmin && (
-                  <Button className="mt-4" onClick={() => navigate("/documents/add?type=shared")}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Опубликовать документ
-                  </Button>
-                )}
-              </CardHeader>
-            </Card>
+            <EmptyState
+              message="Пока нет документов"
+              hint={isAdmin ? "Опубликуйте первый общий документ" : "Администратор ещё не опубликовал ни одного документа"}
+              actionLabel={isAdmin ? "Опубликовать документ" : undefined}
+              onAction={isAdmin ? () => navigate("/documents/add?type=shared") : undefined}
+            />
           ) : (
             <div className="grid gap-4">
-              {sharedDocs.map((doc) => {
-                const displayTitle = localStorage.getItem(SHARED_TITLE_KEY(doc.id)) || doc.filename;
-                return (
-                  <Card key={doc.id} className="hover:shadow-md transition-shadow">
-                    <CardHeader>
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <CardTitle className="text-lg flex items-center gap-2">
-                            <FileText className="h-5 w-5 text-primary" />
-                            {displayTitle}
-                          </CardTitle>
-                          <CardDescription>
-                            PDF • Опубликовано {formatDate(doc.uploaded_at)} • {doc.uploaded_by_full_name || doc.uploaded_by}
-                          </CardDescription>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => navigate(`/documents/${doc.id}`)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          {isAdmin && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              disabled={deletingId === doc.id}
-                              onClick={(e) => handleDeleteShared(doc.id, e)}
-                              className="text-muted-foreground hover:text-destructive"
-                            >
-                              {deletingId === doc.id
-                                ? <Loader2 className="h-4 w-4 animate-spin" />
-                                : <Trash2 className="h-4 w-4" />}
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </CardHeader>
-                  </Card>
-                );
-              })}
+              {sharedDocs.map((doc) => (
+                <DocumentCard
+                  key={doc.id}
+                  title={doc.title || doc.filename}
+                  description={`PDF • Опубликовано ${formatDate(doc.uploaded_at)} • ${doc.uploaded_by_full_name || doc.uploaded_by}`}
+                  onClick={() => navigate(`/documents/${doc.id}`)}
+                  onRename={isAdmin ? () => { setRenamingDoc({ id: doc.id, title: doc.title || doc.filename, type: "shared" }); setRenameValue(doc.title || doc.filename); } : undefined}
+                  onDelete={isAdmin ? () => handleDeleteShared(doc.id) : undefined}
+                  deleteLoading={deletingId === doc.id}
+                />
+              ))}
             </div>
           )}
         </TabsContent>
       </Tabs>
+
+      <Dialog open={!!renamingDoc} onOpenChange={(open) => !open && setRenamingDoc(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Переименовать документ</DialogTitle>
+          </DialogHeader>
+          <Input
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleRenameConfirm()}
+            autoFocus
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenamingDoc(null)}>Отмена</Button>
+            <Button onClick={handleRenameConfirm} disabled={!renameValue.trim()}>Сохранить</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

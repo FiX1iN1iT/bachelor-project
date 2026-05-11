@@ -112,8 +112,8 @@ const Admin = () => {
                   <UserIcon className="h-6 w-6 text-primary-foreground" />
                 </div>
                 <div>
-                  <CardTitle>{fullName || user.id}</CardTitle>
-                  <CardDescription>{user.id}</CardDescription>
+                  <CardTitle>{user.id}</CardTitle>
+                  {fullName && <CardDescription>{fullName}</CardDescription>}
                 </div>
               </div>
             </CardHeader>

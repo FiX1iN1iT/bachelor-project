@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ArrowLeft, Download, FileText, Layers, Loader2, ScanText, Trash2 } from "lucide-react";
+import { ArrowLeft, Download, FileText, Layers, Loader2, ScanText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const SHARED_TITLE_KEY = (id: string) => `shared_title_${id}`;
@@ -36,7 +36,6 @@ const ViewDocument = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const user = authService.getCurrentUser();
-  const isAdmin = authService.isAdmin(user);
 
   const [loadState, setLoadState] = useState<"loading" | "ready">("loading");
   const [docSource, setDocSource] = useState<DocSource | null>(null);
@@ -52,7 +51,6 @@ const ViewDocument = () => {
   const [progressMsg, setProgressMsg] = useState("");
   const [progressValue, setProgressValue] = useState(0);
 
-  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (!documentId) return;
@@ -191,21 +189,7 @@ const ViewDocument = () => {
     }
   };
 
-  const handleDelete = async () => {
-    if (!documentId || docSource !== "shared") return;
-    setIsDeleting(true);
-    try {
-      await apiService.deleteDocument(documentId);
-      localStorage.removeItem(SHARED_PARSED_KEY(documentId));
-      localStorage.removeItem(SHARED_TITLE_KEY(documentId));
-      await vectorStore.deleteBySource(documentId);
-      toast({ title: "Документ удалён", description: "Документ успешно удалён." });
-      navigate("/documents?tab=shared");
-    } catch {
-      toast({ title: "Ошибка удаления", variant: "destructive" });
-      setIsDeleting(false);
-    }
-  };
+
 
   const downloadText = (content: string, filename: string) => {
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
@@ -256,98 +240,54 @@ const ViewDocument = () => {
             <p className="text-muted-foreground mt-1">{docMeta}</p>
           </div>
         </div>
-        {docSource === "shared" && isAdmin && (
-          <Button
-            variant="destructive"
-            size="sm"
-            disabled={isDeleting}
-            onClick={handleDelete}
-            className="shrink-0"
-          >
-            {isDeleting
-              ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              : <Trash2 className="h-4 w-4 mr-2" />}
-            Удалить
-          </Button>
-        )}
       </div>
 
-      {/* Parsing card — shown for shared docs until parsed */}
-      {docSource === "shared" && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" />
-                <CardTitle>Извлечённый текст</CardTitle>
-              </div>
-              {parsingState === "done" && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2"
-                  onClick={() => downloadText(parsedText, `${baseFilename}_parsed.txt`)}
-                >
-                  <Download className="h-4 w-4" />
-                  Скачать текст
-                </Button>
-              )}
+      {/* Text card — unified for personal and shared */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              <CardTitle>Извлечённый текст</CardTitle>
             </div>
-            <CardDescription>
-              {parsingState === "done"
-                ? "Текст успешно извлечён из PDF"
-                : "Нажмите кнопку, чтобы скачать PDF с сервера и извлечь текст"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {(parsingState === "idle" || parsingState === "error") && (
-              <Button onClick={handleParse} className="gap-2">
-                <FileText className="h-4 w-4" />
-                {parsingState === "error" ? "Повторить парсинг" : "Запустить парсинг"}
-              </Button>
-            )}
-            {parsingRunning && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>{parsingLabel}</span>
-              </div>
-            )}
-            {parsingState === "done" && parsedText && (
-              <pre className="whitespace-pre-wrap font-sans text-sm text-foreground bg-muted p-4 rounded-lg max-h-96 overflow-y-auto">
-                {parsedText}
-              </pre>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Content card — shown for personal docs (text already available) */}
-      {docSource === "personal" && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" />
-                <CardTitle>Содержимое документа</CardTitle>
-              </div>
+            {parsingState === "done" && (
               <Button
                 variant="outline"
                 size="sm"
                 className="gap-2"
-                onClick={() => downloadText(parsedText, `${docTitle}_parsed.txt`)}
+                onClick={() => downloadText(parsedText, `${baseFilename}_parsed.txt`)}
               >
                 <Download className="h-4 w-4" />
                 Скачать текст
               </Button>
+            )}
+          </div>
+          <CardDescription>
+            {parsingState === "done"
+              ? "Текст успешно извлечён из PDF"
+              : "Нажмите кнопку, чтобы скачать PDF с сервера и извлечь текст"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {(parsingState === "idle" || parsingState === "error") && (
+            <Button onClick={handleParse} className="gap-2">
+              <FileText className="h-4 w-4" />
+              {parsingState === "error" ? "Повторить парсинг" : "Запустить парсинг"}
+            </Button>
+          )}
+          {parsingRunning && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>{parsingLabel}</span>
             </div>
-          </CardHeader>
-          <CardContent>
-            <pre className="whitespace-pre-wrap font-sans text-sm text-foreground bg-muted p-4 rounded-lg">
+          )}
+          {parsingState === "done" && parsedText && (
+            <pre className="whitespace-pre-wrap font-sans text-sm text-foreground bg-muted p-4 rounded-lg max-h-96 overflow-y-auto">
               {parsedText}
             </pre>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
 
       {/* Semantic chunking panel */}
       <Card>
