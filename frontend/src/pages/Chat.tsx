@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ArrowLeft, Send, Loader2, BookOpen, Bug } from "lucide-react";
+import { ArrowLeft, Send, Loader2, BookOpen, Bug, Copy, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const Chat = () => {
@@ -31,6 +31,8 @@ const Chat = () => {
 
   // Document title cache: docId → title
   const [docTitles, setDocTitles] = useState<Record<string, string>>({});
+
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Debug panel
   const [debugOpen, setDebugOpen] = useState(false);
@@ -170,6 +172,12 @@ const Chat = () => {
     }
   };
 
+  const handleCopy = (id: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -296,10 +304,23 @@ const Chat = () => {
                     </div>
                   )}
 
-                  {message.timestamp && (
-                    <p className="text-xs opacity-50">
-                      {new Date(message.timestamp).toLocaleTimeString('ru-RU')}
-                    </p>
+                  {(message.timestamp || message.content) && (
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs opacity-50">
+                        {message.timestamp ? new Date(message.timestamp).toLocaleTimeString('ru-RU') : ''}
+                      </p>
+                      {message.content && (
+                        <button
+                          onClick={() => handleCopy(message.id, message.content)}
+                          className="text-xs opacity-50 hover:opacity-100 transition-opacity"
+                          title="Копировать"
+                        >
+                          {copiedId === message.id
+                            ? <Check className="h-3.5 w-3.5" />
+                            : <Copy className="h-3.5 w-3.5" />}
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
