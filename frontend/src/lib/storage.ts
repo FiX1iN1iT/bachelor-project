@@ -38,6 +38,7 @@ export interface Document {
 export interface MLParams {
   retrieverModel: string;
   retrieverTopK: number;
+  retrieverMinScore: number;
   generatorModel: string;
   generatorTemperature: number;
   generatorMaxTokens: number;
@@ -51,6 +52,7 @@ const ML_PARAMS_KEY = 'medical_ml_params';
 const defaultMLParams: MLParams = {
   retrieverModel: 'Xenova/paraphrase-multilingual-MiniLM-L12-v2',
   retrieverTopK: 5,
+  retrieverMinScore: 0.3,
   generatorModel: 'Qwen2.5-7B-Instruct-q4f16_1-MLC',
   generatorTemperature: 0.4,
   generatorMaxTokens: 512,
@@ -152,7 +154,7 @@ export const storageService = {
   // ML Parameters
   getMLParams(): MLParams {
     const params = localStorage.getItem(ML_PARAMS_KEY);
-    return params ? JSON.parse(params) : defaultMLParams;
+    return params ? { ...defaultMLParams, ...JSON.parse(params) } : defaultMLParams;
   },
 
   saveMLParams(params: MLParams): void {

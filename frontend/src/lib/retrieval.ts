@@ -12,10 +12,10 @@ export interface RetrievedChunk extends Chunk {
 
 export async function retrieveContext(query: string): Promise<RetrievedChunk[]> {
   const queryEmbedding = await embedText(query);
-  const { retrieverTopK } = storageService.getMLParams();
+  const { retrieverTopK, retrieverMinScore } = storageService.getMLParams();
   const results = await vectorStore.search(queryEmbedding, retrieverTopK);
 
-  return results.map(({ chunk, score }) => ({
+  return results.filter(({ score }) => score >= retrieverMinScore).map(({ chunk, score }) => ({
     id: chunk.id,
     text: chunk.content,
     startIndex: 0,

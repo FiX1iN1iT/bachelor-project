@@ -100,7 +100,7 @@ const Admin = () => {
           </TabsTrigger>
           <TabsTrigger value="debug">
             <Bug className="h-4 w-4 mr-2" />
-            Отладка
+            IndexedDB
           </TabsTrigger>
         </TabsList>
 
@@ -206,6 +206,23 @@ const Admin = () => {
                       />
                       <p className="text-sm text-muted-foreground">
                         Количество релевантных фрагментов для извлечения (1–10)
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label>Минимальное сходство</Label>
+                        <span className="text-sm font-semibold tabular-nums">{mlParams.retrieverMinScore.toFixed(2)}</span>
+                      </div>
+                      <Slider
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={[mlParams.retrieverMinScore]}
+                        onValueChange={([v]) => setMLParams({ ...mlParams, retrieverMinScore: v })}
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Порог косинусного сходства — чанки ниже порога исключаются из контекста (0.0–1.0)
                       </p>
                     </div>
                   </div>
