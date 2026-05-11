@@ -226,8 +226,13 @@ const Admin = () => {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Qwen2.5-7B-Instruct-q4f16_1-MLC">Qwen2.5-7B-Instruct-q4f16_1-MLC</SelectItem>
-                          <SelectItem value="Qwen2.5-3B-Instruct-q4f16_1-MLC">Qwen2.5-3B-Instruct-q4f16_1-MLC</SelectItem>
+                          <SelectItem value="Llama-3.2-1B-Instruct-q4f16_1-MLC">Llama 3.2 1B Instruct</SelectItem>
+                          <SelectItem value="Llama-3.2-3B-Instruct-q4f16_1-MLC">Llama 3.2 3B Instruct</SelectItem>
+                          <SelectItem value="Llama-3.2-8B-Instruct-q4f16_1-MLC">Llama 3.2 8B Instruct</SelectItem>
+                          <SelectItem value="Qwen3-4B-q4f16_1-MLC">Qwen3 4B</SelectItem>
+                          <SelectItem value="Qwen3-8B-q4f16_1-MLC">Qwen3 8B</SelectItem>
+                          <SelectItem value="Qwen2.5-3B-Instruct-q4f16_1-MLC">Qwen2.5 3B Instruct</SelectItem>
+                          <SelectItem value="Qwen2.5-7B-Instruct-q4f16_1-MLC">Qwen2.5 7B Instruct</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
