@@ -33,19 +33,11 @@ const Landing = () => {
             Получайте мгновенные ответы на медицинские вопросы с помощью передовых технологий ИИ.
             Безопасно, конфиденциально и всегда доступно.
           </p>
-          <div className="flex gap-4 justify-center pt-4">
-            <Button size="lg" onClick={() => navigate('/auth?mode=register')}>
-              Начать общение
-            </Button>
-            <Button size="lg" variant="outline" onClick={() => navigate('/auth')}>
-              Узнать больше
-            </Button>
-          </div>
         </div>
       </section>
 
       {/* Features */}
-      <section className="container mx-auto px-4 py-20">
+      <section className="container mx-auto px-4 py-6">
         <div className="grid md:grid-cols-3 gap-8">
           <div className="bg-card p-8 rounded-lg border border-border space-y-4">
             <MessageSquare className="h-12 w-12 text-primary" />
@@ -59,7 +51,7 @@ const Landing = () => {
             <Shield className="h-12 w-12 text-primary" />
             <h3 className="text-xl font-semibold text-card-foreground">Безопасность и приватность</h3>
             <p className="text-muted-foreground">
-              Ваши разговоры и документы зашифрованы и хранятся в полной конфиденциальности.
+              Ваши разговоры и документы хранятся только локально.
             </p>
           </div>
           
@@ -73,25 +65,10 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="container mx-auto px-4 py-20 text-center">
-        <div className="bg-primary/10 border border-primary/20 rounded-lg p-12 max-w-2xl mx-auto">
-          <h3 className="text-3xl font-bold text-foreground mb-4">
-            Готовы начать?
-          </h3>
-          <p className="text-muted-foreground mb-6">
-            Присоединяйтесь к тысячам пользователей, которые доверяют МедЧат ИИ свои медицинские вопросы.
-          </p>
-          <Button size="lg" onClick={() => navigate('/auth?mode=register')}>
-            Создать бесплатный аккаунт
-          </Button>
-        </div>
-      </section>
-
       {/* Footer */}
       <footer className="border-t border-border mt-20">
         <div className="container mx-auto px-4 py-8 text-center text-muted-foreground">
-          <p>© 2024 МедЧат ИИ. Это прототип приложения.</p>
+          <p>© 2026 МедЧат ИИ. Это прототип приложения.</p>
           <p className="text-sm mt-2">Не заменяет профессиональную медицинскую консультацию.</p>
         </div>
       </footer>
