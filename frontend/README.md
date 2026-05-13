@@ -17,6 +17,23 @@
 
 ---
 
+## Быстрый старт
+
+```bash
+npm install
+npm run dev      # Vite dev server на порту 8080
+npm run build    # Production-сборка
+npm run preview  # Предпросмотр production-сборки
+```
+
+При первом открытии чата браузер загрузит:
+- `Xenova/all-MiniLM-L6-v2` (~23 МБ) для эмбеддингов
+- `Qwen2.5-7B-Instruct-q4f16_1-MLC` (~4 ГБ) для генерации
+
+Требуется браузер с поддержкой **WebGPU** (Chrome 113+, Edge 113+).
+
+---
+
 ## Архитектура
 
 ```
@@ -40,6 +57,33 @@
   ├─ buildContext()         ← сборка промпта
   └─ webLLMService.generateWithMessages()  ← LLM-генерация
 ```
+
+### Библиотеки (`src/lib/`)
+
+1. **`api.ts`** — HTTP-вызовы бэкенда (загрузка/скачивание документов, presigned URLs)
+2. **`auth.ts`** — управление JWT (localStorage, декодирование, login/register/logout)
+3. **`storage.ts`** — localStorage CRUD (документы, чаты, сообщения, ML-параметры)
+4. **`pdfExtractor.ts`** — извлечение текста из PDF, очистка медицинского текста, семантическая разбивка через LLM
+5. **`embeddings.ts`** — Xenova/all-MiniLM-L6-v2 (384-мерные векторы, ONNX)
+6. **`vectorStore.ts`** — векторное хранилище на IndexedDB, поиск по косинусному сходству top-K
+7. **`webllm.ts`** — синглтон MLCEngine для Qwen2.5-7B; `generateWithMessages()`, `generateResponse()`, `generateRaw()`
+8. **`context.ts`** — форматирование чанков в контекст промпта (лимит 6000 символов)
+9. **`retrieval.ts`** — векторный поиск и ранжирование
+10. **`rag.ts`** — оркестрация: `retrieveContext()` → `buildContext()` → `generateWithMessages()`
+11. **`utils.ts`** — общие утилиты
+
+### Страницы (`src/pages/`)
+
+| Страница | Используемые библиотеки |
+|---|---|
+| `Landing.tsx` | — |
+| `Auth.tsx` | `auth.ts`, `api.ts` |
+| `Documents.tsx` | `api.ts`, `storage.ts`, `vectorStore.ts`, `embeddings.ts` |
+| `AddDocument.tsx` | `api.ts` |
+| `ViewDocument.tsx` | `pdfExtractor.ts`, `embeddings.ts`, `vectorStore.ts` |
+| `Chat.tsx` | `rag.ts`, `webllm.ts`, `storage.ts` |
+| `ChatList.tsx` | `storage.ts` |
+| `Admin.tsx` | `storage.ts` (ML-параметры: temperature, top-K и др.) |
 
 ---
 
@@ -176,15 +220,7 @@ interface VectorChunk {
 | `totalCount()` | Общее число чанков |
 | `clear()` | Полная очистка |
 
-Метрика близости — **косинусное сходство**:
-
-```typescript
-function cosineSimilarity(a: number[], b: number[]): number {
-  // dot(a, b) / (norm(a) * norm(b))
-}
-```
-
-Поиск линейный — перебор всех чанков в памяти после загрузки из IndexedDB.
+Метрика близости — **косинусное сходство**. Поиск линейный — перебор всех чанков в памяти после загрузки из IndexedDB.
 
 ---
 
@@ -198,34 +234,17 @@ function cosineSimilarity(a: number[], b: number[]): number {
 
 **`webLLMService.initialize(onProgress?): Promise<void>`**
 
-```typescript
-const engine = new webllm.MLCEngine({ initProgressCallback });
-await engine.reload(MODEL_ID);
-```
+При первом запуске происходит загрузка весов и компиляция шейдеров WebGPU (несколько минут). Прогресс передаётся через `onProgress` callback. При повторных запусках браузер использует кэш.
 
-При первом запуске происходит загрузка весов и компиляция шейдеров WebGPU — этот процесс занимает несколько минут. Прогресс передаётся через `onProgress` callback и отображается в UI. При повторном запуске браузер использует кэш.
-
-Объект `webLLMService` является **синглтоном** с флагами состояния:
-
-```typescript
-isInitialized: boolean
-isInitializing: boolean
-```
+Объект `webLLMService` является **синглтоном** с флагами `isInitialized` и `isInitializing`.
 
 ### Методы генерации
 
-**`generateWithMessages(messages, onChunk?): Promise<string>`** — используется RAG-пайплайном. Принимает готовый массив сообщений, не добавляя системный промпт. Поддерживает стриминг через `onChunk(delta)`.
+**`generateWithMessages(messages, onChunk?): Promise<string>`** — используется RAG-пайплайном. Принимает готовый массив сообщений, поддерживает стриминг через `onChunk(delta)`.
 
-**`generateResponse(messages, onChunk?): Promise<string>`** — пользовательский метод. Автоматически добавляет системный промпт:
+**`generateResponse(messages, onChunk?): Promise<string>`** — пользовательский метод. Автоматически добавляет системный промпт (медицинский ИИ-ассистент, только русский язык).
 
-```
-Ты — медицинский ИИ-ассистент. Отвечай ТОЛЬКО на русском языке.
-Никогда не используй английский, латиницу или любые другие языки и символы.
-Отвечай кратко и по существу. Давай конкретные советы.
-Всегда напоминай, что твои ответы носят информационный характер и не заменяют консультацию врача.
-```
-
-**`generateRaw(messages): Promise<string>`** — используется при семантической разбивке. Параметры: `temperature: 0.1`, `max_tokens: 512`. Возвращает структурированный JSON-ответ для парсинга границ чанков.
+**`generateRaw(messages): Promise<string>`** — используется при семантической разбивке. Параметры: `temperature: 0.1`, `max_tokens: 512`. Возвращает JSON-ответ для парсинга границ чанков.
 
 ---
 
@@ -263,52 +282,19 @@ interface RAGSource {
 
 **`buildContext(chunks: Chunk[]): string`** (`src/lib/context.ts`)
 
-Собирает чанки в строку с метками источников:
-
-```
-[Source 1]
-<текст чанка 1>
-
-[Source 2]
-<текст чанка 2>
-...
-```
-
-Максимальный размер контекста — **6000 символов** (~1500 токенов). Последний чанк обрезается, если превышает лимит.
+Собирает чанки в строку с метками источников (`[Source 1]`, `[Source 2]`, …). Максимальный размер контекста — **6000 символов** (~1500 токенов). Последний чанк обрезается, если превышает лимит.
 
 ### Шаг 3 — Generation
 
 **`webLLMService.generateWithMessages(messages, onChunk)`**
 
-Массив сообщений:
-
-```typescript
-[
-  {
-    role: "system",
-    content:
-      "Ты — медицинский ИИ-ассистент.\n" +
-      "Отвечай ТОЛЬКО на основе предоставленного контекста.\n" +
-      "Не придумывай информацию, которой нет в контексте.\n" +
-      "При цитировании указывай источник [Source X].\n" +
-      "Будь точен и клиничен.",
-  },
-  {
-    role: "user",
-    content: `Контекст:\n${context}\n\nВопрос: ${query}`,
-  },
-]
-```
-
-Ответ стримится через `onChunk(delta)` — каждый токен вызывает обновление состояния React.
+Системный промпт: отвечать только на основе контекста, не придумывать информацию, указывать источники `[Source X]`. Ответ стримится через `onChunk(delta)`.
 
 ---
 
 ## Интеграция в Chat
 
 **`src/pages/Chat.tsx` — `handleSendMessage()`**
-
-Полный цикл от запроса до ответа:
 
 ```
 1. Сохранить сообщение пользователя в localStorage
@@ -338,20 +324,3 @@ interface RAGSource {
 | IndexedDB | Векторные эмбеддинги чанков | `vector_store.chunks` |
 
 Весь пайплайн работает офлайн после первой загрузки модели. Модель WebLLM и ONNX-модель эмбеддингов кэшируются браузером.
-
----
-
-## Запуск
-
-```bash
-npm install
-npm run dev      # Vite dev server
-npm run build    # Production build
-npm run preview  # Предпросмотр production-сборки
-```
-
-При первом открытии чата браузер загрузит:
-- `Xenova/all-MiniLM-L6-v2` (~23 МБ) для эмбеддингов
-- `Qwen2.5-7B-Instruct-q4f16_1-MLC` (~4 ГБ) для генерации
-
-Требуется браузер с поддержкой **WebGPU** (Chrome 113+, Edge 113+).
