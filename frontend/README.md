@@ -27,7 +27,7 @@ npm run preview  # Предпросмотр production-сборки
 ```
 
 При первом открытии чата браузер загрузит:
-- `Xenova/all-MiniLM-L6-v2` (~23 МБ) для эмбеддингов
+- `paraphrase-multilingual-MiniLM-L12-v2` (~400 МБ) для эмбеддингов
 - `Qwen2.5-7B-Instruct-q4f16_1-MLC` (~4 ГБ) для генерации
 
 Требуется браузер с поддержкой **WebGPU** (Chrome 113+, Edge 113+).
@@ -176,7 +176,7 @@ interface Chunk {
 
 **`src/lib/embeddings.ts`**
 
-Модель: `Xenova/all-MiniLM-L6-v2` (Transformers.js, ONNX Runtime в браузере).  
+Модель: `Xenova/paraphrase-multilingual-MiniLM-L12-v2` (Transformers.js, ONNX Runtime в браузере).  
 Размерность вектора: **384**.
 
 ```typescript
