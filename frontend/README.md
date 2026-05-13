@@ -27,7 +27,7 @@ npm run preview  # Предпросмотр production-сборки
 ```
 
 При первом открытии чата браузер загрузит:
-- `paraphrase-multilingual-MiniLM-L12-v2` (~400 МБ) для эмбеддингов
+- `Xenova/paraphrase-multilingual-MiniLM-L12-v2` (~400 МБ) для эмбеддингов
 - `Qwen2.5-7B-Instruct-q4f16_1-MLC` (~4 ГБ) для генерации
 
 Требуется браузер с поддержкой **WebGPU** (Chrome 113+, Edge 113+).
